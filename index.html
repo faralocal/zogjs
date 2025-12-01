@@ -491,6 +491,143 @@
                 grid-template-columns: 1fr;
             }
         }
+
+
+        /* --- DEMO SPECIFIC STYLES --- */
+
+        /* Radio Group Layout Fix */
+        .radio-group label {
+            display: flex;
+            /* Make sure radio/checkbox and label text align */
+            align-items: center;
+            font-weight: 400;
+            /* Less heavy font for internal labels */
+            cursor: pointer;
+        }
+
+        /* Input Range Styling */
+        input[type="range"] {
+            padding: 0;
+            /* Remove padding for range inputs */
+            height: 25px;
+            cursor: pointer;
+        }
+
+        /* Dynamic Box Enhancements */
+        .dynamic-box {
+            /* ... existing styles ... */
+            transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            /* Smoother transition */
+        }
+
+        /* Dynamic Class Binding Styles */
+        .active-border {
+            border: 4px dashed var(--secondary) !important;
+            box-shadow: 0 0 0 8px rgba(249, 115, 22, 0.2);
+            /* Ring effect */
+        }
+
+        /* Conditional Status Styles (for userAge demo) */
+        .status-minor,
+        .status-teen,
+        .status-adult {
+            font-weight: 600;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.25rem;
+            margin-bottom: 0;
+            display: inline-block;
+        }
+
+        .status-minor {
+            background-color: #fee2e2;
+            /* Red-100 */
+            color: #ef4444;
+            /* Red-500 */
+        }
+
+        .status-teen {
+            background-color: #fef3c7;
+            /* Yellow-100 */
+            color: #f59e0b;
+            /* Yellow-600 */
+        }
+
+        .status-adult {
+            background-color: #dbeafe;
+            /* Blue-100 */
+            color: #3b82f6;
+            /* Blue-500 */
+        }
+
+        /* z-show Secret Box Style */
+        .secret-box {
+            background: #10b981;
+            /* Green tone for secret box */
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 1.2rem;
+        }
+
+        /* HR Separator for Conditionals */
+        .demo-card hr {
+            border: 0;
+            height: 1px;
+            background-color: var(--border);
+            margin: 1.5rem 0;
+        }
+
+        /* List Rendering Enhancements */
+        ul.feature-list li {
+            /* ... existing styles ... */
+            transition: background-color 0.2s;
+        }
+
+        ul.feature-list li:hover {
+            background: #e2e8f0;
+            /* Slight hover effect */
+        }
+
+        /* Badge for Removal Button (X) */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: none;
+            line-height: 1;
+            /* Fix vertical alignment */
+        }
+
+        /* Specific style for Delete Button in List */
+        .badge-danger {
+            background: #ef4444;
+            /* Red color */
+            color: white;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+
+        .badge-danger:hover {
+            background: #dc2626;
+            /* Darker red on hover */
+        }
+
+        /* Button Info Style (for Toggle Class) - Missing in original CSS */
+        .btn-info {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background-color: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
     </style>
 </head>
 
@@ -516,7 +653,8 @@
                 <div class="hero-content">
                     <div class="tagline">Ultra Lightweight</div>
                     <h1>The Minimalist <span class="highlight">Reactive</span> Library</h1>
-                    <p>zog.js is a minimal, lightweight reactive library inspired by Vue.js. Built with modern JavaScript features to keep your applications fast and efficient.</p>
+                    <p>zog.js is a minimal, lightweight reactive library inspired by Vue.js. Built with modern
+                        JavaScript features to keep your applications fast and efficient.</p>
                     <p style="font-size: 1.25rem; font-weight: 600; color: var(--text); margin-top: 1.5rem;">
                         <i class="fas fa-weight-hanging"></i> This library will never exceed 7kb
                     </p>
@@ -544,42 +682,48 @@
                             <i class="fas fa-feather"></i>
                         </div>
                         <h3>Minimal Size</h3>
-                        <p>At just ~2kb, zog.js won't bloat your application. We're committed to keeping it under 7kb forever.</p>
+                        <p>At just ~2kb, zog.js won't bloat your application. We're committed to keeping it under 7kb
+                            forever.</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">
                             <i class="fas fa-bolt"></i>
                         </div>
                         <h3>Reactive</h3>
-                        <p>Experience the power of reactivity with a simple API. Your UI updates automatically when data changes.</p>
+                        <p>Experience the power of reactivity with a simple API. Your UI updates automatically when data
+                            changes.</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">
                             <i class="fas fa-code"></i>
                         </div>
                         <h3>Vue-like Syntax</h3>
-                        <p>If you know Vue.js, you'll feel right at home with zog.js. Similar directives and concepts make it easy to learn.</p>
+                        <p>If you know Vue.js, you'll feel right at home with zog.js. Similar directives and concepts
+                            make it easy to learn.</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">
                             <i class="fas fa-mobile-alt"></i>
                         </div>
                         <h3>Modern JavaScript</h3>
-                        <p>Built with modern JavaScript features like ES6 modules, proxies, and more for optimal performance.</p>
+                        <p>Built with modern JavaScript features like ES6 modules, proxies, and more for optimal
+                            performance.</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">
                             <i class="fas fa-rocket"></i>
                         </div>
                         <h3>Fast Performance</h3>
-                        <p>Minimal overhead and efficient updates ensure your applications remain fast and responsive.</p>
+                        <p>Minimal overhead and efficient updates ensure your applications remain fast and responsive.
+                        </p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">
                             <i class="fas fa-puzzle-piece"></i>
                         </div>
                         <h3>Flexible</h3>
-                        <p>Use it for small components or entire applications. zog.js adapts to your needs without imposing strict patterns.</p>
+                        <p>Use it for small components or entire applications. zog.js adapts to your needs without
+                            imposing strict patterns.</p>
                     </div>
                 </div>
             </div>
@@ -614,7 +758,9 @@
                     <h2>Live Demos</h2>
                     <p>See zog.js in action with these interactive examples</p>
                 </div>
+
                 <div id="app" class="demo-container">
+
                     <div class="demo-card">
                         <h3><i class="fas fa-hand-pointer"></i> Two-way Binding</h3>
                         <div class="form-group">
@@ -636,6 +782,12 @@
                                 <option value="Manager">Product Manager</option>
                             </select>
                         </div>
+
+                        <div z-if="userRole === 'Manager'" class="preview-box">
+                            <label for=""> Write down your level of experience. </label>
+                            <input type="text" z-model="experience" placeholder="e.g., 5 years">
+                        </div>
+
                         <div class="form-group">
                             <div class="checkbox-group">
                                 <input type="checkbox" z-model="isSubscribe">
@@ -645,39 +797,81 @@
                         <div class="preview-box">
                             <p>Role: {{ userRole }}</p>
                             <p>Subscribed: {{ isSubscribe }}</p>
+                            <p z-if="userRole === 'Manager' && experience !== 0" >Experience: {{ experience }}</p>
                         </div>
                     </div>
 
                     <div class="demo-card">
-                        <h3><i class="fas fa-palette"></i> Dynamic Styles</h3>
+                        <h3><i class="fas fa-code-branch"></i> Conditionals & Visibility</h3>
+                        <div class="form-group">
+                            <label>Enter Age:</label>
+                            <input type="number" z-model="userAge" min="0">
+                        </div>
+
+                        <div class="preview-box">
+                            <p z-if="userAge < 10" class="status-minor">You are still a child.</p>
+                            <p z-else-if="userAge < 18" class="status-teen">You are a teenager.</p>
+                            <p z-else class="status-adult">You are an adult.</p>
+                        </div>
+
+                        <hr>
+
+                        <div class="form-group">
+                            <button @click="toggleSecret" class="btn btn-secondary">Toggle Secret</button>
+                        </div>
+                        <div z-show="isSecretVisible" class="preview-box secret-box">
+                            <p>This box uses z-show (display: none).</p>
+                        </div>
+                    </div>
+
+                    <div class="demo-card">
+                        <h3><i class="fas fa-palette"></i> Dynamic Styles & Classes</h3>
                         <div class="form-group">
                             <label>Box Width ({{ boxWidth }}%):</label>
                             <input type="range" z-model="boxWidth" min="10" max="100">
                         </div>
                         <div class="form-group">
                             <button @click="toggleColor" class="btn btn-dark">Toggle Color</button>
+                            <button @click="toggleActive" class="btn btn-info">Toggle Class</button>
                         </div>
-                        <div :style="dynamicStyle" class="dynamic-box">
+
+                        <div :style="dynamicStyle" :class="{ 'active-border': isActive, 'shadow-lg': true }"
+                            class="dynamic-box">
                             I am Reactive!
                         </div>
                     </div>
 
                     <div class="demo-card">
-                        <h3><i class="fas fa-list"></i> List Rendering</h3>
+                        <h3><i class="fas fa-list"></i> List Rendering (z-for)</h3>
                         <div class="form-group" style="display: flex; gap: 10px;">
-                            <input type="text" z-model="newItem" placeholder="Add new tech...">
+                            <input type="text" z-model="newItem" @keydown.enter="addTech" placeholder="Add new tech...">
                             <button @click="addTech" class="btn btn-primary">Add</button>
                         </div>
                         <ul class="feature-list">
-                            <li z-for="tech in techStack">
-                                <span>{{ tech }}</span>
-                                <span class="badge">Active</span>
+                            <li z-for="tech in techStack" :key="tech">
+                                <span>{{ tech }} (Index: {{ index }})</span>
+                                <button @click="removeTech(index)" class="badge badge-danger">X</button>
                             </li>
                         </ul>
                         <div z-if="techStack.length === 0" style="text-align: center; margin-top: 1rem;">
                             <p style="color: var(--text-light);">The list is empty!</p>
                         </div>
                     </div>
+
+                    <div class="demo-card">
+                        <h3><i class="fas fa-terminal"></i> z-html & Radio Input</h3>
+                        <div class="form-group radio-group">
+                            <label><input type="radio" name="htmlContent" z-model="htmlType" value="safe"> Safe
+                                HTML</label>
+                            <label><input type="radio" name="htmlContent" z-model="htmlType" value="raw"> Raw
+                                HTML</label>
+                        </div>
+
+                        <div class="preview-box">
+                            <div z-html="currentHtmlContent"></div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </section>
@@ -711,57 +905,106 @@
 
     <script type="module">
         import { createApp, ref, watchEffect } from './dist/zog.es.js'
+
         createApp(() => {
-            // Basic Data
+            // --- 1. Basic Data ---
             const userName = ref("Developer");
             const userRole = ref("Developer");
             const isSubscribe = ref(true);
 
-            // Dynamic Styles
+            // --- 2. Conditionals & Visibility ---
+            const userAge = ref(25);
+            const isSecretVisible = ref(false);
+
+            // --- 3. Dynamic Styles & Classes ---
             const boxWidth = ref(50);
             const isBlue = ref(true);
-            const dynamicStyle = ref("");
+            const isActive = ref(false);
+            const experience = ref(0)
 
-            // Lists
+            // --- 4. Lists & z-for ---
             const newItem = ref("");
             const techStack = ref(["JavaScript", "HTML5", "CSS3"]);
 
-            // Methods
+            // --- 5. z-html & Radio ---
+            const htmlType = ref("safe");
+            const safeHtml = "<b>Safe content:</b> This is regular bold text.";
+            const rawHtml = "<span style='color: red;'>Raw content with dynamic style.</span>";
+
+            // --- Computed State (Derived from others) ---
+
+            // Derived style object
+            const dynamicStyle = ref({});
+
+            // Derived HTML content
+            const currentHtmlContent = ref(safeHtml);
+
+
+            // --- Methods ---
+
             const toggleColor = () => {
                 isBlue.value = !isBlue.value;
-                updateBoxStyle();
             };
 
-            const updateBoxStyle = () => {
-                const color = isBlue.value ? 'var(--primary)' : 'var(--secondary)';
-                dynamicStyle.value = `width: ${boxWidth.value}%; background-color: ${color};`;
+            const isDeveloper = () => {
+                return userRole.value === "Developer";
+            };
+
+            const toggleActive = () => {
+                isActive.value = !isActive.value;
+            };
+
+            const toggleSecret = () => {
+                isSecretVisible.value = !isSecretVisible.value;
             };
 
             const addTech = () => {
                 if (newItem.value.trim() !== "") {
-                    techStack.value = [...techStack.value, newItem.value];
+                    // Using spread operator to force array replacement (required for current z-for logic)
+                    techStack.value = [...techStack.value, newItem.value.trim()];
                     newItem.value = "";
                 }
             };
 
-            // Watcher effect for slider
+            const removeTech = (index) => {
+                // Create a new array reference to trigger reactivity
+                techStack.value = techStack.value.filter((_, i) => i !== index);
+            };
+
+            // --- Watchers & Initializers ---
+
+            // Watcher for Dynamic Style (runs when boxWidth or isBlue changes)
             watchEffect(() => {
-                updateBoxStyle();
+                const color = isBlue.value ? 'var(--primary)' : 'var(--secondary)';
+                dynamicStyle.value = {
+                    width: `${boxWidth.value}%`,
+                    backgroundColor: color,
+                    height: '100px', // Ensure height is set
+                    transition: 'all 0.3s'
+                };
             });
 
-            // Initialize box style
-            updateBoxStyle();
+            // Watcher for z-html content
+            watchEffect(() => {
+                currentHtmlContent.value = htmlType.value === 'safe' ? safeHtml : rawHtml;
+            });
 
+            // --- Return Scope ---
             return {
-                userName,
-                userRole,
-                isSubscribe,
-                boxWidth,
-                dynamicStyle,
-                toggleColor,
-                techStack,
-                newItem,
-                addTech
+                // Basic
+                userName, userRole, isSubscribe,
+
+                // Conditionals
+                userAge, isSecretVisible, toggleSecret,
+
+                // Dynamic Styles & Classes
+                boxWidth, dynamicStyle, isActive, toggleColor, toggleActive,experience,
+
+                // Lists
+                techStack, newItem, addTech, removeTech,
+
+                // z-html & Radio
+                htmlType, currentHtmlContent, isDeveloper
             };
         }).mount('#app');
 
@@ -789,7 +1032,7 @@
             button.addEventListener('click', () => {
                 const codeBlock = button.parentElement.querySelector('pre');
                 navigator.clipboard.writeText(codeBlock.textContent);
-                
+
                 // Visual feedback
                 const originalHTML = button.innerHTML;
                 button.innerHTML = '<i class="fas fa-check"></i>';
