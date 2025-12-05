@@ -145,10 +145,11 @@ const compile = (el, scope) => {
         return;
     }
 
-    // 4. Handle Attributes & Directives (No changes needed)
+    // 4. Handle Attributes & Directives (با پشتیبانی z-on:)
     Array.from(el.attributes).forEach(({ name, value }) => {
-        if (name.startsWith('@')) {
-            const event = name.slice(1);
+
+        if (name.startsWith('@') || name.startsWith('z-on:')) {
+            const event = name.startsWith('@') ? name.slice(1) : name.slice(5);
             el.removeAttribute(name);
             el.addEventListener(event, (e) => {
                 const handler = scope[value];
