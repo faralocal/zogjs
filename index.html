@@ -260,6 +260,42 @@
             margin-bottom: 1rem;
         }
 
+        /* Limitations Section */
+        .limitations {
+            background-color: #f8f8f8;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .limitations-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .limitations h2 {
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+        }
+
+        .limitations p {
+            font-size: 1.2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .library-badge {
+            display: inline-block;
+            background-color: var(--secondary);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+
         /* Installation Section */
         .installation {
             background-color: white;
@@ -676,9 +712,11 @@
             </div>
             <ul class="nav-links">
                 <li><a href="#features">Features</a></li>
+                <li><a href="#limitations">Limitations</a></li>
                 <li><a href="#installation">Installation</a></li>
                 <li><a href="#demo">Demo</a></li>
                 <li><a href="https://github.com/zogjs/zogjs" target="_blank">GitHub</a></li>
+                <li><a href="https://marketplace.visualstudio.com/items?itemName=zogjs.zogjs-support" target="_blank">VS Code</a></li>
             </ul>
         </nav>
     </header>
@@ -761,6 +799,16 @@
                         <p>Use it for small components or entire applications. zog.js adapts to your needs without
                             imposing strict patterns.</p>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="limitations" class="limitations">
+            <div class="container">
+                <div class="limitations-content">
+                    <h2>When Zog.js is NOT the Right Choice</h2>
+                    <p>For creating complex applications and websites that require extensive features like routing systems,
+                        state management, and other advanced capabilities, it's better to use comprehensive frameworks like <a target="_blank" rel="noopener noreferrer nofollow" href="https://vuejs.org/">Vue.js</a> .</p>
                 </div>
             </div>
         </section>
@@ -919,13 +967,14 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-section">
-                    <h3>zog.js</h3>
-                    <p>The minimalist reactive library that will never exceed 7kb. (Even in the future)</p>
+                    <h3>Zog.js</h3>
+                    <p>Clean minimalist responsive library</p>
                 </div>
                 <div class="footer-section">
                     <h3>Resources</h3>
                     <ul class="footer-links">
                         <li><a href="https://github.com/zogjs/zogjs#readme">Documentation</a></li>
+                        <li><a href="https://marketplace.visualstudio.com/items?itemName=zogjs.zogjs-support" target="_blank">VS Code Extension</a></li>
                     </ul>
                 </div>
                 <div class="footer-section">
