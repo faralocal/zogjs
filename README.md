@@ -1,9 +1,8 @@
 # Zog.js
 
-A tiny, dependency-free reactive UI library with a compact reactivity core and a small template compiler.
-Designed for straightforward progressive enhancement: mount a reactive scope on any DOM node and use simple directives (`z-if`, `z-for`, `@click`, `z-model`, `{{ }}`) to declaratively bind data to the DOM.
+Full reactivity with minimal code size.
 
-This README documents the public API, template directives, and practical examples so you can get an app running quickly and understand the library capabilities.
+Zog.js is a minimalist JavaScript library for building reactive user interfaces. It allows you to write clean, declarative templates directly in your HTML and power them with a simple, yet powerful, reactivity system. Inspired by the best parts of modern frameworks, Zog.js offers an intuitive developer experience with zero dependencies and no build step required.
 
 ---
 
@@ -27,55 +26,48 @@ Place `zog.js` next to your HTML or serve it via your bundler. Example HTML:
 
 ```html
 <!-- index.html -->
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Zog App</title>
-  </head>
-  <body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Zog.js Counter</title>
+</head>
+<body>
+
+    <!-- 1. Define your component's HTML structure -->
     <div id="app">
-      <input z-model="name" placeholder="Your name" />
-      <p z-text="greeting"></p>
-
-      <button @click="increment">Click me</button>
-      <p>Clicked: {{ count }} times</p>
-
-      <ul>
-        <li z-for="(item, i) in items">{{ i }} - {{ item }}</li>
-      </ul>
-
-      <template z-if="showMore">
-        <p z-html="moreHtml"></p>
-      </template>
+        <h1>{{ title }}</h1>
+        <p>Current count: {{ count }}</p>
+        <button @click="increment">Increment</button>
+        <button @click="decrement">Decrement</button>
     </div>
 
+    <!-- 2. Import Zog.js -->
     <script type="module">
-      import { createApp, ref, reactive, computed, watchEffect, route } from './zog.js';
+        import { createApp, ref } from 'https://cdn.zogjs.com/zog.es.js'; // Or from a CDN
 
-      const app = createApp(() => {
-        const name = ref('Ben');
-        const count = ref(0);
-        const items = ref(['apple','banana','cherry']);
-        const showMore = ref(true);
-        const moreHtml = ref('<strong>More content</strong>');
+        createApp(()=>{
 
-        const greeting = computed(() => `Hello, ${name.value}!`);
-        const increment = () => count.value++;
+                const title = ref('Counter App');
+                const count = ref(0);
 
-        // run a reactive effect
-        watchEffect(() => {
-          console.log('path is', route.path); // reactive route snapshot
-        });
+                const increment = () => {
+                    count.value++;
+                };
 
-        return {
-          name, count, items, greeting, increment, showMore, moreHtml
-        };
-      });
+                const decrement = () => {
+                    count.value--;
+                };
 
-      app.mount('#app');
+                // Expose state and methods to the template
+                return {
+                    title,
+                    count,
+                    increment,
+                    decrement
+                };
+        }).mount('#app');
     </script>
-  </body>
+</body>
 </html>
 ```
 
