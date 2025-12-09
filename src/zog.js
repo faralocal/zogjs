@@ -17,15 +17,52 @@ class Dep {
         }
     }
     notify() {
-        this.subs.forEach(e => {
-            if (e.scheduler) e.scheduler(e.run.bind(e));
-            else e.run();
+        // Create a copy to avoid infinite loops when effects modify reactive data
+        const effectsToRun = new Set(this.subs);
+        effectsToRun.forEach(e => {
+            // Prevent running effect that is currently executing (infinite loop prevention)
+            if (e !== activeEffect) {
+                if (e.scheduler) e.scheduler(e.run.bind(e));
+                else queueEffect(e);
+            }
         });
     }
 }
 
+// Effect queue for batching updates (prevents multiple re-renders)
+let effectQueue = [];
+let isFlushing = false;
+
+const queueEffect = (effect) => {
+    if (!effectQueue.includes(effect)) {
+        effectQueue.push(effect);
+        if (!isFlushing) {
+            isFlushing = true;
+            Promise.resolve().then(flushEffects);
+        }
+    }
+};
+
+const flushEffects = () => {
+    try {
+        // Sort effects by id to ensure parent effects run before children
+        effectQueue.sort((a, b) => (a.id || 0) - (b.id || 0));
+        for (const effect of effectQueue) {
+            if (effect.active) {
+                effect.run();
+            }
+        }
+    } finally {
+        effectQueue = [];
+        isFlushing = false;
+    }
+};
+
+let effectId = 0;
+
 class ReactiveEffect {
     constructor(fn, scheduler = null) {
+        this.id = effectId++;
         this.fn = fn;
         this.scheduler = scheduler;
         this.deps = [];
@@ -33,7 +70,11 @@ class ReactiveEffect {
     }
 
     run() {
-        if (!this.active) return;
+        if (!this.active) return this.fn();
+        
+        // Clean up old dependencies before re-running
+        this.cleanup();
+        
         try {
             effectStack.push(this);
             activeEffect = this;
@@ -44,10 +85,17 @@ class ReactiveEffect {
         }
     }
 
+    // Clean up old dependencies to prevent memory leaks
+    cleanup() {
+        for (const dep of this.deps) {
+            dep.subs.delete(this);
+        }
+        this.deps = [];
+    }
+
     stop() {
         if (this.active) {
-            this.deps.forEach(d => d.subs.delete(this));
-            this.deps = [];
+            this.cleanup();
             this.active = false;
         }
     }
@@ -196,7 +244,11 @@ export const reactive = target => {
 
         set: (t, k, v, receiver) => {
             const old = t[k];
-            const hadKey = isArray ? Number(k) < t.length : k in t;
+            // Fix: properly check if key exists for arrays (handle string indices)
+            const numKey = Number(k);
+            const hadKey = isArray 
+                ? (Number.isInteger(numKey) && numKey >= 0 && numKey < t.length)
+                : Object.prototype.hasOwnProperty.call(t, k);
             
             // If new value is reactive, store its raw version
             const rawValue = isObj(v) && v[IS_REACTIVE] ? v[RAW] : v;
@@ -304,31 +356,69 @@ export const watch = (source, callback, options = {}) => {
     
     if (typeof source === 'function') {
         getter = source;
-    } else if (source._isRef) {
+    } else if (source && source._isRef) {
         getter = () => source.value;
     } else if (isObj(source)) {
-        getter = () => traverse(source);
+        // For deep watching, we need to traverse and return a new value indicator
+        getter = () => {
+            traverse(source);
+            return source;
+        };
+        options.deep = true;
     } else {
         getter = () => source;
     }
 
+    let cleanup;
+    const onCleanup = (fn) => {
+        cleanup = fn;
+    };
+
     const job = () => {
+        if (!effect.active) return;
+        
         const newValue = effect.run();
-        if (options.deep || !Object.is(newValue, oldValue)) {
-            callback(newValue, oldValue);
-            oldValue = newValue;
+        
+        // For deep watching, always trigger callback since we can't easily compare
+        // For shallow watching, use Object.is comparison
+        const shouldTrigger = options.deep 
+            ? true 
+            : !Object.is(newValue, oldValue);
+            
+        if (shouldTrigger) {
+            // Run cleanup before callback
+            if (cleanup) {
+                cleanup();
+                cleanup = undefined;
+            }
+            callback(newValue, oldValue, onCleanup);
+            // Deep clone for objects to properly detect changes next time
+            oldValue = options.deep && isObj(newValue) 
+                ? JSON.parse(JSON.stringify(toRaw(newValue)))
+                : newValue;
         }
     };
 
-    const effect = new ReactiveEffect(getter, job);
+    const effect = new ReactiveEffect(getter, options.flush === 'sync' ? undefined : () => queueEffect({ run: job, active: true, id: effectId++ }));
     
     if (options.immediate) {
         job();
     } else {
         oldValue = effect.run();
+        if (options.deep && isObj(oldValue)) {
+            oldValue = JSON.parse(JSON.stringify(toRaw(oldValue)));
+        }
     }
 
-    return () => effect.stop();
+    return () => {
+        effect.stop();
+        if (cleanup) cleanup();
+    };
+};
+
+// Helper to get raw value (forward declaration for watch)
+const toRaw = (observed) => {
+    return observed && observed[RAW] ? observed[RAW] : observed;
 };
 
 // Helper function to traverse object
@@ -441,7 +531,7 @@ const compile = (el, scope, cs) => {
 
     if (el.hasAttribute('z-else-if') || el.hasAttribute('z-else')) return;
 
-    // z-for with better array support
+    // z-for with key-based diffing for better performance
     if (el.hasAttribute('z-for')) {
         const rawFor = el.getAttribute('z-for');
         const forMatch = rawFor.match(/^\s*(?:\((\w+)\s*,\s*(\w+)\)|(?:(\w+)))\s+(?:in|of)\s+(.*)$/);
@@ -466,18 +556,19 @@ const compile = (el, scope, cs) => {
         parent.insertBefore(ph, el);
         el.remove();
         el.removeAttribute('z-for');
-
-        let items = [];
         
-        // Function to handle array updates
-        const updateList = () => {
-            // Cleanup previous items
-            items.forEach(({clone, scope: s}) => { 
-                clone.remove(); 
-                s.cleanup(); 
-            });
-            items = [];
+        // Get key attribute for optimized diffing
+        const keyAttr = el.getAttribute(':key') || el.getAttribute('z-key');
+        if (keyAttr) {
+            el.removeAttribute(':key');
+            el.removeAttribute('z-key');
+        }
 
+        let itemsMap = new Map(); // key -> { clone, scope, item, index }
+        let currentKeys = [];
+        
+        // Function to handle array updates with key-based diffing
+        const updateList = () => {
             // Get new array
             let arr = evalExp(listExp, scope);
             
@@ -486,31 +577,74 @@ const compile = (el, scope, cs) => {
                 arr = arr.value;
             }
             
-            // Don't use RAW for reactive arrays to preserve reactivity
             if (!arr) arr = [];
             if (!Array.isArray(arr)) arr = [];
 
+            const newKeys = [];
+            const newItemsMap = new Map();
+            
             arr.forEach((v, i) => {
-                const clone = el.cloneNode(true);
-                parent.insertBefore(clone, ph);
+                // Generate key for this item
+                const key = keyAttr 
+                    ? evalExp(keyAttr, { ...scope, [itemName]: { _isRef: true, value: v }, [indexName]: { _isRef: true, value: i } })
+                    : i;
                 
-                // Create refs for item and index
-                const itemRef = ref(v);
-                const indexRef = ref(i);
+                newKeys.push(key);
                 
-                const s = new Scope({ 
-                    ...scope, 
-                    [itemName]: itemRef, 
-                    [indexName]: indexRef 
-                });
+                // Check if we can reuse existing item
+                const existing = itemsMap.get(key);
                 
-                compile(clone, s.data, s);
-                items.push({ clone, scope: s, itemRef, indexRef });
+                if (existing) {
+                    // Update existing item's refs
+                    existing.itemRef.value = v;
+                    existing.indexRef.value = i;
+                    newItemsMap.set(key, existing);
+                } else {
+                    // Create new item
+                    const clone = el.cloneNode(true);
+                    const itemRef = ref(v);
+                    const indexRef = ref(i);
+                    
+                    const s = new Scope({ 
+                        ...scope, 
+                        [itemName]: itemRef, 
+                        [indexName]: indexRef 
+                    });
+                    
+                    compile(clone, s.data, s);
+                    newItemsMap.set(key, { clone, scope: s, itemRef, indexRef });
+                }
             });
+            
+            // Remove items that no longer exist
+            for (const [key, item] of itemsMap) {
+                if (!newItemsMap.has(key)) {
+                    item.clone.remove();
+                    item.scope.cleanup();
+                }
+            }
+            
+            // Reorder/insert items in correct position
+            let prevNode = ph;
+            for (const key of newKeys) {
+                const item = newItemsMap.get(key);
+                if (item.clone.previousSibling !== prevNode) {
+                    parent.insertBefore(item.clone, prevNode.nextSibling);
+                }
+                prevNode = item.clone;
+            }
+            
+            itemsMap = newItemsMap;
+            currentKeys = newKeys;
         };
 
         cs.addEffect(watchEffect(updateList));
-        cs.addEffect(() => items.forEach(({scope: s}) => s.cleanup()));
+        cs.addEffect(() => {
+            for (const item of itemsMap.values()) {
+                item.scope.cleanup();
+            }
+            itemsMap.clear();
+        });
         return;
     }
 
@@ -558,15 +692,38 @@ const compile = (el, scope, cs) => {
             cs.addEffect(watchEffect(() => {
                 const res = evalExp(value, scope);
                 if (attr === 'z-text') el.textContent = res ?? '';
-                else if (attr === 'z-html') el.innerHTML = res ?? '';
+                else if (attr === 'z-html') {
+                    // WARNING: z-html can cause XSS if used with untrusted content
+                    // Consider using a sanitizer library in production
+                    el.innerHTML = res ?? '';
+                }
                 else if (attr === 'z-show') el.style.display = res ? '' : 'none';
-                else if (attr === 'style' && isObj(res)) Object.assign(el.style, res);
+                else if (attr === 'style' && isObj(res)) {
+                    // Reset styles and apply new ones
+                    Object.keys(res).forEach(k => {
+                        el.style[k] = res[k];
+                    });
+                }
                 else if (attr === 'class' && isObj(res)) {
                     const dynamic = Object.keys(res).filter(k => res[k]).join(' ');
                     el.className = (staticClass + ' ' + dynamic).trim();
+                } else if (attr === 'class' && typeof res === 'string') {
+                    el.className = (staticClass + ' ' + res).trim();
+                } else if (typeof res === 'boolean') {
+                    // Handle boolean attributes (disabled, checked, etc.)
+                    const setName = attr.startsWith('z-') ? attr.slice(2) : attr;
+                    if (res) {
+                        el.setAttribute(setName, '');
+                    } else {
+                        el.removeAttribute(setName);
+                    }
                 } else {
                     const setName = attr.startsWith('z-') ? attr.slice(2) : attr;
-                    el.setAttribute(setName, res ?? '');
+                    if (res == null) {
+                        el.removeAttribute(setName);
+                    } else {
+                        el.setAttribute(setName, res);
+                    }
                 }
             }));
         }
@@ -634,10 +791,55 @@ export const toRef = (obj, key) => {
     };
 };
 
-// Helper function to access the raw object
-export const toRaw = (observed) => {
-    return observed && observed[RAW] ? observed[RAW] : observed;
+// Shallow ref - doesn't make nested objects reactive
+export const shallowRef = val => {
+    const dep = new Dep();
+    return {
+        _isRef: true,
+        _isShallow: true,
+        get value() { dep.depend(); return val; },
+        set value(v) { if (!Object.is(v, val)) { val = v; dep.notify(); } },
+        toString: () => String(val)
+    };
 };
+
+// Shallow reactive - only top-level properties are reactive
+export const shallowReactive = target => {
+    if (!isObj(target)) return target;
+    
+    const depsMap = new Map();
+    const getDep = k => {
+        let d = depsMap.get(k);
+        if (!d) { d = new Dep(); depsMap.set(k, d); }
+        return d;
+    };
+
+    return new Proxy(target, {
+        get: (t, k) => {
+            if (k === IS_REACTIVE) return true;
+            if (k === RAW) return t;
+            getDep(k).depend();
+            return t[k]; // Don't make nested reactive
+        },
+        set: (t, k, v) => {
+            const old = t[k];
+            t[k] = v;
+            if (!Object.is(old, v)) getDep(k).notify();
+            return true;
+        }
+    });
+};
+
+// Trigger reactivity manually
+export const triggerRef = (r) => {
+    if (r && r._isRef) {
+        // Force notify by accessing internal dep
+        r.value = r.value;
+    }
+};
+
+// Helper function to access the raw object (exported version)
+export { toRaw };
 
 // Function to check if value is reactive
 export const isReactive = (value) => {
