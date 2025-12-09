@@ -9,12 +9,11 @@ Zog.js is a minimalist JavaScript library for building reactive user interfaces.
 ## Highlights
 
 * Reactive primitives: `ref`, `reactive`, `computed`
-* Effects & watchers: `watchEffect`
+* Effects: `watchEffect`
 * Lightweight template compiler for declarative DOM binding and interpolation (`{{ }}`)
 * Template directives: `z-if`, `z-for`, `z-text`, `z-html`, `z-show`, `z-model`, `z-on` (shorthand `@`)
-* Minimal router snapshot: `route.path`, `route.hash`, `route.query`
 * App lifecycle: `createApp(...).mount(selector)` and `.unmount()`
-* Utilities: `nextTick`, `unref`, `toRef`
+* Plugin system: `use(plugin, options)` for extending functionality
 
 ---
 
@@ -43,28 +42,27 @@ Place `zog.js` next to your HTML or serve it via your bundler. Example HTML:
 
     <!-- 2. Import Zog.js -->
     <script type="module">
-        import { createApp, ref } from 'https://cdn.zogjs.com/zog.es.js'; // Or from a CDN
+        import { createApp, ref } from './zog.js';
 
-        createApp(()=>{
+        createApp(() => {
+            const title = ref('Counter App');
+            const count = ref(0);
 
-                const title = ref('Counter App');
-                const count = ref(0);
+            const increment = () => {
+                count.value++;
+            };
 
-                const increment = () => {
-                    count.value++;
-                };
+            const decrement = () => {
+                count.value--;
+            };
 
-                const decrement = () => {
-                    count.value--;
-                };
-
-                // Expose state and methods to the template
-                return {
-                    title,
-                    count,
-                    increment,
-                    decrement
-                };
+            // Expose state and methods to the template
+            return {
+                title,
+                count,
+                increment,
+                decrement
+            };
         }).mount('#app');
     </script>
 </body>
@@ -78,7 +76,7 @@ Place `zog.js` next to your HTML or serve it via your bundler. Example HTML:
 ### Reactivity primitives
 
 * `ref(initialValue)` — creates a reactive reference with `.value`.
-* `reactive(object)` — returns a reactive proxy of an object (deep reactive for nested objects).
+* `reactive(object)` — returns a reactive proxy of an object (deep reactive for nested objects and arrays).
 * `computed(getter)` — memoized reactive value that recomputes when dependencies change.
 * `watchEffect(fn, opts?)` — run a reactive effect immediately and re-run when dependencies change. Returns a function to stop the effect.
 
@@ -98,22 +96,31 @@ The compiler supports a small set of directives for common tasks:
 
 * `z-if="expression"` — render element only when truthy.
 * `z-else-if="expression"` and `z-else` — chainable conditional branches.
-* `z-for="item in list"` or `z-for="(item, index) in list"` — repeat an element for each item.
+* `z-for="item in list"` or `z-for="(item, index) in list"` — repeat an element for each item. Supports `:key` attribute for optimized diffing.
 * `z-text="expression"` — set `textContent`.
 * `z-html="expression"` — set `innerHTML`.
 * `z-show="expression"` — toggles `display` (`none` when falsy).
 * `z-model="prop"` — two-way binding for `input`, `select`, `textarea`; supports checkbox/radio semantics.
 * `z-on:event="handler"` or shorthand `@event="handler"` — attach event listener; handler may be a function in scope or an expression.
+* `:attribute="expression"` — bind any attribute dynamically (supports style objects, class objects/strings, and boolean attributes).
 
-### Router snapshot
+### Plugin system
 
-A lightweight reactive snapshot of the browser location:
+Zog.js supports a plugin architecture to extend functionality:
 
-* `route.path` — `location.pathname`
-* `route.hash` — `location.hash`
-* `route.query` — query object parsed from `location.search`
+```js
+import { use } from './zog.js';
 
-These properties are reactive — reading them inside `watchEffect` or `computed` will subscribe to updates from `hashchange`/`popstate`.
+const MyPlugin = {
+    install(zog, options) {
+        // Access Zog APIs: reactive, ref, computed, watchEffect, createApp
+        // Add global functionality
+        console.log('Plugin installed with options:', options);
+    }
+};
+
+use(MyPlugin, { theme: 'dark' });
+```
 
 ---
 
@@ -128,10 +135,7 @@ import {
   reactive,
   computed,
   watchEffect,
-  route,
-  nextTick,
-  unref,
-  toRef
+  use
 } from './zog.js';
 ```
 
@@ -145,10 +149,11 @@ Creates a reactive reference.
 
 ### `reactive(obj)`
 
-Wraps an object in a reactive proxy.
+Wraps an object or array in a reactive proxy. Supports deep reactivity for nested structures.
 
 * Usage: `const state = reactive({ todos: [] })`
 * Access / mutate like normal object: `state.todos.push('x')`
+* Array methods (push, pop, splice, etc.) are fully reactive
 
 ### `computed(getter)`
 
@@ -172,17 +177,13 @@ Creates an app instance. `setup` is a function returning the reactive scope obje
 * `app.mount(selector)` — mount on DOM node
 * `app.unmount()` — cleanup
 
-### `route`
+### `use(plugin, options?)`
 
-Reactive snapshot with getters:
+Install a plugin to extend Zog.js functionality.
 
-* `route.path`, `route.hash`, `route.query`
-
-### Utilities
-
-* `nextTick(fn)` — schedule `fn` on the microtask queue (useful after DOM updates).
-* `unref(v)` — returns `v.value` if `v` is a ref, otherwise `v`.
-* `toRef(obj, key)` — create a proxy ref pointing to `obj[key]`.
+* `plugin` must have an `install(zog, options)` method
+* Plugins receive access to core APIs and utilities
+* Prevents duplicate installations automatically
 
 ---
 
@@ -215,7 +216,7 @@ createApp(() => {
   <button @click="add">Add</button>
 
   <ul>
-    <li z-for="(item, i) in todos">
+    <li z-for="(item, i) in todos" :key="item">
       {{ i + 1 }}. {{ item }}
       <button @click="remove(i)">remove</button>
     </li>
@@ -255,9 +256,9 @@ createApp(() => {
 ```html
 <div id="cond">
   <button @click="toggle">Toggle</button>
-  <template z-if="show">
+  <div z-if="show">
     <p z-html="htmlContent"></p>
-  </template>
+  </div>
 </div>
 
 <script type="module">
@@ -272,50 +273,104 @@ createApp(() => {
 </script>
 ```
 
+### Dynamic styling and classes
+
+```html
+<div id="styling">
+  <button @click="toggleActive">Toggle Active</button>
+  <div 
+    :class="{ active: isActive, 'text-bold': true }"
+    :style="{ color: textColor, fontSize: size + 'px' }">
+    Styled content
+  </div>
+</div>
+
+<script type="module">
+import { createApp, ref } from './zog.js';
+
+createApp(() => {
+  const isActive = ref(false);
+  const textColor = ref('blue');
+  const size = ref(16);
+  
+  const toggleActive = () => isActive.value = !isActive.value;
+  
+  return { isActive, textColor, size, toggleActive };
+}).mount('#styling');
+</script>
+```
+
 ---
 
 ## Template directive quick reference
 
-| Directive                       |                                     Purpose | Example                                                    |
-| ------------------------------- | ------------------------------------------: | ---------------------------------------------------------- |
-| `{{ expr }}`                    |        Interpolate JS expression from scope | `<p>Hello, {{ name }}</p>`                                 |
-| `z-if` / `z-else-if` / `z-else` |                       Conditional rendering | `<div z-if="isOpen">Open</div>`                            |
+| Directive                       | Purpose                                     | Example                                                    |
+| ------------------------------- | ------------------------------------------- | ---------------------------------------------------------- |
+| `{{ expr }}`                    | Interpolate JS expression from scope        | `<p>Hello, {{ name }}</p>`                                 |
+| `z-if` / `z-else-if` / `z-else` | Conditional rendering                       | `<div z-if="isOpen">Open</div>`                            |
 | `z-for`                         | Loop: `item in list` or `(item, i) in list` | `<li z-for="(item, i) in items">{{ i }} - {{ item }}</li>` |
-| `z-text`                        |                           Set `textContent` | `<p z-text="message"></p>`                                 |
-| `z-html`                        |                             Set `innerHTML` | `<div z-html="rawHtml"></div>`                             |
-| `z-show`                        |                      Toggle display (style) | `<div z-show="visible">...</div>`                          |
-| `z-model`                       |                 Two-way binding with inputs | `<input z-model="value" />`                                |
-| `z-on:event` or `@event`        |                              Event listener | `<button @click="handle">Click</button>`                   |
+| `:key`                          | Unique key for z-for optimization           | `<li z-for="item in items" :key="item.id">`                |
+| `z-text`                        | Set `textContent`                           | `<p z-text="message"></p>`                                 |
+| `z-html`                        | Set `innerHTML`                             | `<div z-html="rawHtml"></div>`                             |
+| `z-show`                        | Toggle display (style)                      | `<div z-show="visible">...</div>`                          |
+| `z-model`                       | Two-way binding with inputs                 | `<input z-model="value" />`                                |
+| `z-on:event` or `@event`        | Event listener                              | `<button @click="handle">Click</button>`                   |
+| `:attribute`                    | Dynamic attribute binding                   | `<div :id="dynamicId" :disabled="isDisabled">`             |
+| `:class`                        | Dynamic class binding (object/string)       | `<div :class="{ active: isActive }">`                      |
+| `:style`                        | Dynamic style binding (object)              | `<div :style="{ color: textColor }">`                      |
 
 Notes:
 
 * Event directive accepts a scope function or expression (`@click="doSomething"` where `doSomething` exists in scope).
 * `z-for` supports `in` and `of` and `(item, index)` tuple syntax.
+* `:key` attribute optimizes list rendering by reusing DOM elements efficiently.
+* Boolean attributes (like `disabled`, `checked`) are handled automatically with `:` binding.
 
 ---
 
-## Router usage (reactive snapshot)
+## Creating plugins
 
-Zog.js exposes a small reactive `route` object:
+Plugins allow you to extend Zog.js with custom functionality. Here's a simple example:
 
 ```js
-import { route } from './zog.js';
+// my-plugin.js
+export default {
+    install(zog, options) {
+        const { reactive, ref, watchEffect } = zog;
+        
+        // Add custom functionality
+        console.log('My plugin installed!', options);
+        
+        // You can access internal utilities if needed
+        const { Dep, ReactiveEffect } = zog.utils;
+    }
+};
 
-watchEffect(() => {
-  console.log('current path:', route.path);
-});
+// main.js
+import { use } from './zog.js';
+import MyPlugin from './my-plugin.js';
+
+use(MyPlugin, { debug: true });
 ```
 
-`route` updates automatically on `hashchange` and `popstate`.
+Plugin use cases:
+* Router implementations
+* State management solutions
+* Development tools
+* Form validation
+* Animation helpers
+* HTTP clients
 
 ---
 
 ## Tips & Gotchas
 
 * Template expressions are evaluated against the scope object returned by your `setup()` function.
-* Use `toRef(obj, 'prop')` to pass a reference to a nested property when a ref is required.
-* Use `nextTick()` if you need to run code after the DOM updates caused by reactive changes.
+* Refs must be accessed with `.value` in JavaScript, but are automatically unwrapped in templates.
+* Array reactivity is fully supported - methods like `push`, `pop`, `splice` trigger updates automatically.
+* Use `:key` in `z-for` loops for better performance when lists change.
 * The library is ESM: import using `type="module"` or bundle with a bundler (Vite, Webpack, Rollup).
+* `z-html` can cause XSS vulnerabilities - only use with trusted content.
 
 ---
 
@@ -323,11 +378,6 @@ watchEffect(() => {
 
 * The repository contains the single-file implementation `zog.js`. Tests and build tooling are not included by default.
 * To experiment, create an HTML page with `<script type="module">` and import `./zog.js`.
-* If you plan to add features or refactors:
-
-  * Keep the public API stable (exports listed above).
-  * Document any additional template directives clearly.
-  * Add minimal reproducible examples for each new feature.
 
 ---
 
@@ -337,5 +387,20 @@ Zog.js is open-source software licensed under the MIT License.
 You are free to use, modify, and distribute this project in commercial or non-commercial applications.
 
 For full details, see the [LICENSE](/LICENSE) file.
+
 ---
 
+## Changelog
+
+### 0.2.3 (Current)
+* Added plugin system with `use()` function
+* Optimized expression evaluator with caching
+* Unified array method handling for smaller bundle size
+* Improved z-for diffing algorithm
+* Reduced code size by ~100 lines
+
+### 0.2.2
+* Full array reactivity support
+* Key-based diffing for z-for
+* Deep reactive objects and arrays
+* Complete directive system
