@@ -64,6 +64,8 @@ const IS_REACTIVE = Symbol();
 const reactiveMap = new WeakMap();
 const isObj = v => v && typeof v === 'object';
 
+const arrayMethods = ['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse'];
+
 export const reactive = target => {
     if (!isObj(target) || target[IS_REACTIVE]) return target;
 
@@ -81,23 +83,47 @@ export const reactive = target => {
         get: (t, k) => {
             if (k === IS_REACTIVE) return true;
             if (k === RAW) return t;
+            
             const dep = getDep(k);
             dep.depend();
+            
             const res = Reflect.get(t, k);
 
             if (res && res._isRef) return res;
+            
+            if (Array.isArray(t) && arrayMethods.includes(k)) {
+                return function(...args) {
+                    const result = Array.prototype[k].apply(t, args);
+                    getDep('length').notify();
+                    for (let i = 0; i < t.length; i++) {
+                        getDep(i).notify();
+                    }
+                    return result;
+                };
+            }
+            
             return isObj(res) ? reactive(res) : res;
         },
-        set: (t, k, v) => {
+        set: (t, k) => {
             const old = t[k];
-            const res = Reflect.set(t, k, v);
-            if (!Object.is(old, v)) getDep(k).notify();
+            const res = Reflect.set(t, k, arguments[2]);
+            if (!Object.is(old, arguments[2])) {
+                getDep(k).notify();
+                if (Array.isArray(t) && k !== 'length') {
+                    getDep('length').notify();
+                }
+            }
             return res;
         },
         deleteProperty: (t, k) => {
             const had = k in t;
             const res = Reflect.deleteProperty(t, k);
-            if (had) getDep(k).notify();
+            if (had) {
+                getDep(k).notify();
+                if (Array.isArray(t)) {
+                    getDep('length').notify();
+                }
+            }
             return res;
         }
     });
@@ -160,7 +186,6 @@ const evalExp = (exp, scope) => {
         const vals = keys.map(k => scope[k]?._isRef ? scope[k].value : scope[k]);
         return Function(...keys, `"use strict";return(${exp})`)(...vals);
     } catch (err) {
-
         if (typeof console !== 'undefined') console.error('evalExp error:', err, 'exp:', exp);
         return undefined;
     }
@@ -170,7 +195,6 @@ const evalExp = (exp, scope) => {
 const compile = (el, scope, cs) => {
     if (!el) return;
 
-    // Text nodes
     if (el.nodeType === 3) {
         const txt = el.textContent;
         if (txt.includes('{{')) {
@@ -183,7 +207,6 @@ const compile = (el, scope, cs) => {
 
     if (el.nodeType !== 1) return;
 
-    // z-if
     if (el.hasAttribute('z-if')) {
         const branches = [];
         let curr = el, parent = el.parentNode;
@@ -210,7 +233,6 @@ const compile = (el, scope, cs) => {
                     if (!b.el.parentNode) {
                         parent.insertBefore(b.el, ph);
                         if (!b.scope) {
-
                             b.scope = new Scope({ ...scope });
                             compile(b.el, b.scope.data, b.scope);
                         }
@@ -228,9 +250,7 @@ const compile = (el, scope, cs) => {
 
     if (el.hasAttribute('z-else-if') || el.hasAttribute('z-else')) return;
 
-    // z-for
     if (el.hasAttribute('z-for')) {
-
         const rawFor = el.getAttribute('z-for');
         const forMatch = rawFor.match(/^\s*(?:\((\w+)\s*,\s*(\w+)\)|(?:(\w+)))\s+(?:in|of)\s+(.*)$/);
         let itemName = 'item', indexName = 'index', listExp = rawFor;
@@ -256,7 +276,6 @@ const compile = (el, scope, cs) => {
 
         let items = [];
         cs.addEffect(watchEffect(() => {
-
             items.forEach(({clone, scope: s}) => { clone.remove(); s.cleanup(); });
             items = [];
 
@@ -276,9 +295,7 @@ const compile = (el, scope, cs) => {
         return;
     }
 
-    // Directives
     Array.from(el.attributes).forEach(({ name, value }) => {
-        // Events
         if (name.startsWith('@') || name.startsWith('z-on:')) {
             const ev = name.startsWith('@') ? name.slice(1) : name.slice(5);
             el.removeAttribute(name);
@@ -289,7 +306,6 @@ const compile = (el, scope, cs) => {
             el.addEventListener(ev, fn);
             cs.addListener(el, ev, fn);
         }
-        // z-model
         else if (name === 'z-model') {
             el.removeAttribute(name);
             const isCheck = el.type === 'checkbox' || el.type === 'radio';
@@ -311,13 +327,9 @@ const compile = (el, scope, cs) => {
                 el.type === 'radio' ? el.checked = String(el.value) === String(res) : el[prop] = res;
             }));
         }
-        // Bindings (both :attr and z-* bindings)
         else if (name.startsWith(':') || name.startsWith('z-')) {
-
             const attr = name.startsWith(':') ? name.slice(1) : name;
-
             el.removeAttribute(name);
-
             const staticClass = attr === 'class' ? el.className : '';
 
             cs.addEffect(watchEffect(() => {
