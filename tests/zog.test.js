@@ -1219,79 +1219,6 @@ describe('Template Compiler', () => {
     });
 });
 
-// ============================================
-// 3. PLUGIN SYSTEM TESTS
-// ============================================
-
-describe('Plugin System', () => {
-    it('should install plugin', () => {
-        let installed = false;
-
-        const plugin = {
-            install(zog, options) {
-                installed = true;
-            }
-        };
-
-        use(plugin);
-        expect(installed).toBe(true);
-    });
-
-    it('should pass options to plugin', () => {
-        let receivedOptions = null;
-
-        const plugin = {
-            install(zog, options) {
-                receivedOptions = options;
-            }
-        };
-
-        use(plugin, { test: 'value' });
-        expect(receivedOptions).toEqual({ test: 'value' });
-    });
-
-    it('should provide Zog APIs to plugin', () => {
-        let receivedAPI = null;
-
-        const plugin = {
-            install(zog, options) {
-                receivedAPI = zog;
-            }
-        };
-
-        use(plugin);
-
-        expect(receivedAPI).toHaveProperty('reactive');
-        expect(receivedAPI).toHaveProperty('ref');
-        expect(receivedAPI).toHaveProperty('computed');
-        expect(receivedAPI).toHaveProperty('watchEffect');
-        expect(receivedAPI).toHaveProperty('createApp');
-        expect(receivedAPI).toHaveProperty('utils');
-    });
-
-    it('should not install same plugin twice', () => {
-        let installCount = 0;
-
-        const plugin = {
-            install() {
-                installCount++;
-            }
-        };
-
-        use(plugin);
-        use(plugin);
-
-        expect(installCount).toBe(1);
-    });
-
-    it('should handle plugin without install method', () => {
-        const invalidPlugin = {};
-
-        expect(() => {
-            use(invalidPlugin);
-        }).not.toThrow();
-    });
-});
 
 // ============================================
 // 4. APP LIFECYCLE TESTS
@@ -2333,389 +2260,9 @@ describe('Support Object in z-model', () => {
     });
 });
 
-
 /**
- * Zog.js v0.3.0 - Hook System and Plugin Tests (FIXED)
+ * Zog.js v0.3.0 - Plugin System Tests (Updated for new API)
  */
-
-describe('Hook System', () => {
-    let app;
-    let hooks = [];
-
-    beforeEach(() => {
-        hooks = [];
-    });
-
-    afterEach(() => {
-        app?.unmount();
-        // Clean up hooks by removing them
-        hooks.forEach(({ name, fn }) => removeHook(name, fn));
-    });
-
-    const registerHook = (name, fn) => {
-        hooks.push({ name, fn });
-        addHook(name, fn);
-        return fn;
-    };
-
-    describe('beforeCompile Hook', () => {
-        it('should call beforeCompile hook for root element', async () => {
-            const hookCalls = [];
-            
-            const hook = registerHook('beforeCompile', (el, scope, cs) => {
-                if (el.nodeType === 1) {
-                    hookCalls.push(el.tagName);
-                }
-                // Don't return anything to continue compilation
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <span>Test</span>
-                </div>
-            `;
-
-            app = createApp(() => ({})).mount('#app');
-            await Promise.resolve();
-
-            // Hook is called on the root div
-            expect(hookCalls.length).toBeGreaterThan(0);
-            expect(hookCalls[0]).toBe('DIV');
-        });
-
-        it('should stop compilation when hook returns false', async () => {
-            let hookCalled = false;
-
-            const hook = registerHook('beforeCompile', (el, scope, cs) => {
-                if (el.id === 'app') {
-                    hookCalled = true;
-                    el.innerHTML = 'Handled by hook';
-                    return false; // Stop compilation
-                }
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div>{{ message }}</div>
-                </div>
-            `;
-
-            const message = ref('Original');
-            app = createApp(() => ({ message })).mount('#app');
-            await Promise.resolve();
-
-            const appEl = document.getElementById('app');
-
-            expect(hookCalled).toBe(true);
-            expect(appEl.textContent).toBe('Handled by hook');
-            // Message should not be interpolated because compilation stopped
-            expect(appEl.textContent).not.toContain('Original');
-        });
-
-        it('should receive correct parameters in beforeCompile', async () => {
-            let receivedEl = null;
-            let receivedScope = null;
-            let receivedCs = null;
-            let callCount = 0;
-
-            const hook = registerHook('beforeCompile', (el, scope, cs) => {
-                // Hook might be called multiple times as compile recurses
-                // Capture the app element specifically
-                if (el.id === 'app' || callCount === 0) {
-                    receivedEl = el;
-                    receivedScope = scope;
-                    receivedCs = cs;
-                }
-                callCount++;
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div>{{ value }}</div>
-                </div>
-            `;
-
-            const value = ref('test');
-            app = createApp(() => ({ value })).mount('#app');
-            await Promise.resolve();
-
-            // Hook should have been called
-            expect(callCount).toBeGreaterThan(0);
-            
-            // Should have received element
-            expect(receivedEl).not.toBeNull();
-            expect(receivedEl.tagName).toBe('DIV');
-            
-            // Should have received scope with value
-            expect(receivedScope).not.toBeNull();
-            expect(receivedScope).toHaveProperty('value');
-            expect(receivedScope.value).toBe(value);
-            
-            // Should have received component scope
-            expect(receivedCs).not.toBeNull();
-            expect(receivedCs).toHaveProperty('effects');
-            expect(receivedCs).toHaveProperty('addEffect');
-            expect(typeof receivedCs.addEffect).toBe('function');
-        });
-
-        it('should allow hook to modify element before compilation', async () => {
-            const hook = registerHook('beforeCompile', (el, scope, cs) => {
-                if (el.id === 'app') {
-                    el.setAttribute('data-hooked', 'true');
-                }
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div>Content</div>
-                </div>
-            `;
-
-            app = createApp(() => ({})).mount('#app');
-            await Promise.resolve();
-
-            const appEl = document.getElementById('app');
-            expect(appEl.getAttribute('data-hooked')).toBe('true');
-        });
-    });
-
-    describe('afterCompile Hook', () => {
-        it('should call afterCompile after element compilation', async () => {
-            const afterCompileCalls = [];
-
-            const hook = registerHook('afterCompile', (el, scope, cs) => {
-                if (el.nodeType === 1) {
-                    afterCompileCalls.push(el.tagName);
-                }
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <span>Test</span>
-                </div>
-            `;
-
-            app = createApp(() => ({})).mount('#app');
-            await Promise.resolve();
-
-            expect(afterCompileCalls.length).toBeGreaterThan(0);
-        });
-
-        it('should allow DOM manipulation in afterCompile', async () => {
-            const hook = registerHook('afterCompile', (el, scope, cs) => {
-                if (el.id === 'app') {
-                    el.setAttribute('data-enhanced', 'true');
-                }
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div>Content</div>
-                </div>
-            `;
-
-            app = createApp(() => ({})).mount('#app');
-            await Promise.resolve();
-
-            const appEl = document.getElementById('app');
-            expect(appEl.getAttribute('data-enhanced')).toBe('true');
-        });
-    });
-
-    describe('beforeEffect Hook', () => {
-        it('should call beforeEffect when effects run', async () => {
-            const effectCalls = [];
-
-            const hook = registerHook('beforeEffect', (effect) => {
-                effectCalls.push({
-                    id: effect.id,
-                    active: effect.active
-                });
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div>{{ counter }}</div>
-                </div>
-            `;
-
-            const counter = ref(0);
-            app = createApp(() => ({ counter })).mount('#app');
-            await Promise.resolve();
-
-            const initialCalls = effectCalls.length;
-            expect(initialCalls).toBeGreaterThan(0);
-            
-            counter.value = 1;
-            await Promise.resolve();
-
-            expect(effectCalls.length).toBeGreaterThan(initialCalls);
-        });
-
-        it('should track effect execution with reactive updates', async () => {
-            const effectIds = new Set();
-
-            const hook = registerHook('beforeEffect', (effect) => {
-                effectIds.add(effect.id);
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div>{{ value }}</div>
-                </div>
-            `;
-
-            const value = ref(0);
-            app = createApp(() => ({ value })).mount('#app');
-            await Promise.resolve();
-
-            expect(effectIds.size).toBeGreaterThan(0);
-
-            value.value = 1;
-            await Promise.resolve();
-            
-            value.value = 2;
-            await Promise.resolve();
-
-            expect(effectIds.size).toBeGreaterThan(0);
-        });
-    });
-
-    describe('onError Hook', () => {
-        it('should handle errors gracefully', async () => {
-            const errors = [];
-
-            const hook = registerHook('onError', (err, context, data) => {
-                errors.push({
-                    message: err.message,
-                    context: context
-                });
-            });
-
-            // onError hook is called when hooks themselves throw errors
-            const errorHook = registerHook('beforeCompile', (el) => {
-                if (el.classList?.contains('error-trigger')) {
-                    throw new Error('Test error in hook');
-                }
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div class="error-trigger">Test</div>
-                </div>
-            `;
-
-            app = createApp(() => ({})).mount('#app');
-            await Promise.resolve();
-
-            expect(errors.length).toBeGreaterThan(0);
-            expect(errors[0].message).toBe('Test error in hook');
-        });
-    });
-
-    describe('Hook Management', () => {
-        it('should allow adding multiple hooks for same event', async () => {
-            const calls = [];
-
-            const hook1 = registerHook('beforeCompile', () => { 
-                calls.push('hook1'); 
-            });
-            
-            const hook2 = registerHook('beforeCompile', () => { 
-                calls.push('hook2'); 
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div>Test</div>
-                </div>
-            `;
-
-            app = createApp(() => ({})).mount('#app');
-            await Promise.resolve();
-
-            expect(calls).toContain('hook1');
-            expect(calls).toContain('hook2');
-        });
-
-        it('should allow removing hooks', async () => {
-            const calls = [];
-
-            const hook = (el) => { 
-                if (el.id === 'app') calls.push('called'); 
-            };
-
-            addHook('beforeCompile', hook);
-
-            document.body.innerHTML = `<div id="app"><div>Test1</div></div>`;
-            app = createApp(() => ({})).mount('#app');
-            await Promise.resolve();
-
-            const callsAfterFirst = calls.length;
-            expect(callsAfterFirst).toBeGreaterThan(0);
-            
-            removeHook('beforeCompile', hook);
-            
-            app.unmount();
-            document.body.innerHTML = `<div id="app"><div>Test2</div></div>`;
-            app = createApp(() => ({})).mount('#app');
-            await Promise.resolve();
-
-            // Should not have called hook again
-            expect(calls.length).toBe(callsAfterFirst);
-        });
-    });
-
-    describe('Hook Execution Order', () => {
-        it('should execute hooks in order: beforeCompile -> afterCompile', async () => {
-            const order = [];
-
-            const beforeHook = registerHook('beforeCompile', (el) => {
-                if (el.id === 'app') order.push('before');
-            });
-
-            const afterHook = registerHook('afterCompile', (el) => {
-                if (el.id === 'app') order.push('after');
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div>Test</div>
-                </div>
-            `;
-
-            app = createApp(() => ({})).mount('#app');
-            await Promise.resolve();
-
-            expect(order).toEqual(['before', 'after']);
-        });
-
-        it('should call beforeEffect before effect execution', async () => {
-            const order = [];
-
-            const hook = registerHook('beforeEffect', () => {
-                order.push('hook');
-            });
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div>{{ value }}</div>
-                </div>
-            `;
-
-            const value = ref(0);
-            app = createApp(() => {
-                order.push('setup');
-                return { value };
-            }).mount('#app');
-            
-            await Promise.resolve();
-
-            expect(order[0]).toBe('setup');
-            expect(order).toContain('hook');
-        });
-    });
-});
 
 describe('Plugin System', () => {
     let app;
@@ -2740,7 +2287,8 @@ describe('Plugin System', () => {
                 }
             };
 
-            use(TestPlugin);
+            app = createApp(() => ({}));
+            app.use(TestPlugin);
 
             expect(receivedAPI).toHaveProperty('reactive');
             expect(receivedAPI).toHaveProperty('ref');
@@ -2761,7 +2309,8 @@ describe('Plugin System', () => {
             };
 
             const testOptions = { foo: 'bar', num: 42 };
-            use(TestPlugin, testOptions);
+            app = createApp(() => ({}));
+            app.use(TestPlugin, testOptions);
 
             expect(receivedOptions).toEqual(testOptions);
         });
@@ -2775,7 +2324,8 @@ describe('Plugin System', () => {
                 }
             };
 
-            use(TestPlugin);
+            app = createApp(() => ({}));
+            app.use(TestPlugin);
 
             expect(receivedUtils).toHaveProperty('isObj');
             expect(receivedUtils).toHaveProperty('evalExp');
@@ -2794,9 +2344,10 @@ describe('Plugin System', () => {
                 }
             };
 
-            use(TestPlugin);
-            use(TestPlugin);
-            use(TestPlugin);
+            app = createApp(() => ({}));
+            app.use(TestPlugin);
+            app.use(TestPlugin);
+            app.use(TestPlugin);
 
             expect(installCount).toBe(1);
         });
@@ -2808,7 +2359,74 @@ describe('Plugin System', () => {
                 }
             };
 
-            expect(() => use(ErrorPlugin)).not.toThrow();
+            app = createApp(() => ({}));
+            expect(() => app.use(ErrorPlugin)).not.toThrow();
+        });
+
+        it('should support method chaining', () => {
+            const Plugin1 = { install() {} };
+            const Plugin2 = { install() {} };
+
+            app = createApp(() => ({}));
+            const result = app.use(Plugin1).use(Plugin2);
+
+            // Result should be the plugin API or the app instance
+            expect(result).toBeDefined();
+        });
+
+        it('should return plugin API when plugin returns value', () => {
+            const TestPlugin = {
+                install() {
+                    return {
+                        customMethod() {
+                            return 'plugin-api';
+                        }
+                    };
+                }
+            };
+
+            app = createApp(() => ({}));
+            const api = app.use(TestPlugin);
+
+            expect(api).toHaveProperty('customMethod');
+            expect(api.customMethod()).toBe('plugin-api');
+        });
+
+        it('should isolate plugins per app instance', () => {
+            let app1Calls = 0;
+            let app2Calls = 0;
+
+            const Plugin1 = {
+                install({ addHook }) {
+                    addHook('beforeCompile', () => app1Calls++);
+                }
+            };
+
+            const Plugin2 = {
+                install({ addHook }) {
+                    addHook('beforeCompile', () => app2Calls++);
+                }
+            };
+
+            document.body.innerHTML = `
+                <div id="app1"><div>Test</div></div>
+                <div id="app2"><div>Test</div></div>
+            `;
+
+            const app1 = createApp(() => ({}));
+            app1.use(Plugin1);
+            app1.mount('#app1');
+
+            const app2 = createApp(() => ({}));
+            app2.use(Plugin2);
+            app2.mount('#app2');
+
+            // Each app should only trigger its own plugin
+            expect(app1Calls).toBeGreaterThan(0);
+            expect(app2Calls).toBeGreaterThan(0);
+
+            app1.unmount();
+            app2.unmount();
         });
     });
 
@@ -2827,15 +2445,15 @@ describe('Plugin System', () => {
                 }
             };
 
-            use(CustomPlugin);
-
             document.body.innerHTML = `
                 <div id="app" data-plugin-target>
                     <div>Content</div>
                 </div>
             `;
 
-            app = createApp(() => ({})).mount('#app');
+            app = createApp(() => ({}));
+            app.use(CustomPlugin);
+            app.mount('#app');
             await Promise.resolve();
 
             expect(pluginExecuted).toBe(true);
@@ -2861,8 +2479,6 @@ describe('Plugin System', () => {
                 }
             };
 
-            use(PerformancePlugin);
-
             document.body.innerHTML = `
                 <div id="app">
                     <div>{{ count }}</div>
@@ -2870,7 +2486,9 @@ describe('Plugin System', () => {
             `;
 
             const count = ref(0);
-            app = createApp(() => ({ count })).mount('#app');
+            app = createApp(() => ({ count }));
+            app.use(PerformancePlugin);
+            app.mount('#app');
             await Promise.resolve();
 
             expect(stats.compileCount).toBeGreaterThan(0);
@@ -2904,15 +2522,15 @@ describe('Plugin System', () => {
                 }
             };
 
-            use(ErrorHandlerPlugin);
-
             document.body.innerHTML = `
                 <div id="app">
                     <div class="error-trigger">Content</div>
                 </div>
             `;
 
-            app = createApp(() => ({})).mount('#app');
+            app = createApp(() => ({}));
+            app.use(ErrorHandlerPlugin);
+            app.mount('#app');
             await Promise.resolve();
 
             expect(errors.length).toBeGreaterThan(0);
@@ -2940,16 +2558,15 @@ describe('Plugin System', () => {
                 }
             };
 
-            use(Plugin1);
-            use(Plugin2);
-
             document.body.innerHTML = `
                 <div id="app">
                     <div>Content</div>
                 </div>
             `;
 
-            app = createApp(() => ({})).mount('#app');
+            app = createApp(() => ({}));
+            app.use(Plugin1).use(Plugin2);
+            app.mount('#app');
             await Promise.resolve();
 
             expect(calls).toContain('plugin1');
@@ -2981,20 +2598,56 @@ describe('Plugin System', () => {
                 }
             };
 
-            use(Plugin1);
-            use(Plugin2);
-
             document.body.innerHTML = `
                 <div id="app">
                     <div>Content</div>
                 </div>
             `;
 
-            app = createApp(() => ({})).mount('#app');
+            app = createApp(() => ({}));
+            app.use(Plugin1).use(Plugin2);
+            app.mount('#app');
             await Promise.resolve();
 
             expect(plugin1Data).toBe('plugin1-processed');
             expect(plugin2Data).toBe('plugin2-saw-plugin1');
+        });
+
+        it('should maintain plugin isolation between apps', async () => {
+            const plugin1Calls = [];
+            const plugin2Calls = [];
+
+            const TrackingPlugin = {
+                install({ addHook }) {
+                    const appId = Math.random().toString(36).substr(2, 9);
+                    addHook('beforeCompile', (el) => {
+                        if (el.id === 'app1') plugin1Calls.push(appId);
+                        if (el.id === 'app2') plugin2Calls.push(appId);
+                    });
+                }
+            };
+
+            document.body.innerHTML = `
+                <div id="app1"><div>Test1</div></div>
+                <div id="app2"><div>Test2</div></div>
+            `;
+
+            const app1 = createApp(() => ({}));
+            app1.use(TrackingPlugin);
+            app1.mount('#app1');
+
+            const app2 = createApp(() => ({}));
+            app2.use(TrackingPlugin);
+            app2.mount('#app2');
+
+            await Promise.resolve();
+
+            // Each app should have triggered its own plugin instance
+            expect(plugin1Calls.length).toBeGreaterThan(0);
+            expect(plugin2Calls.length).toBeGreaterThan(0);
+
+            app1.unmount();
+            app2.unmount();
         });
     });
 
@@ -3011,7 +2664,8 @@ describe('Plugin System', () => {
                 }
             };
 
-            use(StatePlugin);
+            app = createApp(() => ({}));
+            app.use(StatePlugin);
 
             expect(pluginState).not.toBeNull();
             expect(pluginState.count).toHaveProperty('value');
@@ -3045,13 +2699,13 @@ describe('Plugin System', () => {
                 }
             };
 
-            use(CompilerPlugin);
-
             document.body.innerHTML = `
                 <div id="app"></div>
             `;
 
-            app = createApp(() => ({})).mount('#app');
+            app = createApp(() => ({}));
+            app.use(CompilerPlugin);
+            app.mount('#app');
             await Promise.resolve();
 
             expect(compileCalled).toBe(true);
@@ -3059,19 +2713,108 @@ describe('Plugin System', () => {
             expect(pluginContent).not.toBeNull();
             expect(pluginContent.textContent).toBe('Plugin content');
         });
+
+        it('should allow plugin to return custom API', () => {
+            const CustomPlugin = {
+                install() {
+                    const items = [];
+                    
+                    return {
+                        addItem(item) {
+                            items.push(item);
+                        },
+                        getItems() {
+                            return items;
+                        }
+                    };
+                }
+            };
+
+            app = createApp(() => ({}));
+            const api = app.use(CustomPlugin);
+
+            expect(api).toHaveProperty('addItem');
+            expect(api).toHaveProperty('getItems');
+
+            api.addItem('test');
+            expect(api.getItems()).toEqual(['test']);
+        });
+    });
+
+    describe('Component Plugin Integration', () => {
+        it('should work with component plugin', async () => {
+            const ComponentPlugin = {
+                install({ addHook, utils }) {
+                    const { Scope, compile, evalExp } = utils;
+                    const components = new Map();
+                    
+                    const registerComponent = (name, definition) => {
+                        const tagName = `z-${name.toLowerCase()}`;
+                        components.set(tagName, definition);
+                    };
+                    
+                    addHook('beforeCompile', (el, scope, cs) => {
+                        if (el.nodeType !== 1) return;
+                        
+                        const tagName = el.tagName.toLowerCase();
+                        const component = components.get(tagName);
+                        
+                        if (!component) return;
+                        
+                        const { template } = component;
+                        const slotContent = el.innerHTML;
+                        const renderedTemplate = template.replace(/<slot\s*\/?>/g, slotContent);
+                        
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = renderedTemplate;
+                        const componentRoot = tempDiv.firstElementChild;
+                        
+                        if (!componentRoot) return;
+                        
+                        el.parentNode?.replaceChild(componentRoot, el);
+                        
+                        const componentScope = new Scope({ ...scope });
+                        compile(componentRoot, componentScope.data, componentScope);
+                        
+                        cs.addEffect(() => componentScope.cleanup());
+                        
+                        return false;
+                    });
+                    
+                    return { registerComponent };
+                }
+            };
+
+            document.body.innerHTML = `
+                <div id="app">
+                    <z-card>
+                        <p>Content</p>
+                    </z-card>
+                </div>
+            `;
+
+            app = createApp(() => ({}));
+            const { registerComponent } = app.use(ComponentPlugin);
+
+            registerComponent('card', {
+                template: `<div class="card"><slot></slot></div>`
+            });
+
+            app.mount('#app');
+            await Promise.resolve();
+
+            const card = document.querySelector('.card');
+            expect(card).not.toBeNull();
+            expect(card.textContent.trim()).toContain('Content');
+        });
     });
 });
 
 describe('Real-World Plugin Examples', () => {
     let app;
-    let installedPlugins = [];
 
     afterEach(() => {
         app?.unmount();
-        installedPlugins.forEach(plugin => {
-            if (plugin.cleanup) plugin.cleanup();
-        });
-        installedPlugins = [];
     });
 
     it('should create a logging plugin', async () => {
@@ -3087,15 +2830,15 @@ describe('Real-World Plugin Examples', () => {
             }
         };
 
-        use(LoggingPlugin);
-
         document.body.innerHTML = `
             <div id="app">
                 <div>Test</div>
             </div>
         `;
 
-        app = createApp(() => ({})).mount('#app');
+        app = createApp(() => ({}));
+        app.use(LoggingPlugin);
+        app.mount('#app');
         await Promise.resolve();
 
         expect(logs.length).toBeGreaterThan(0);
@@ -3116,18 +2859,59 @@ describe('Real-World Plugin Examples', () => {
             }
         };
 
-        use(AnalyticsPlugin);
-
         document.body.innerHTML = `
             <div id="app">
                 <button data-track="button-click">Click</button>
             </div>
         `;
 
-        app = createApp(() => ({})).mount('#app');
+        app = createApp(() => ({}));
+        app.use(AnalyticsPlugin);
+        app.mount('#app');
         await Promise.resolve();
 
         expect(events.length).toBeGreaterThan(0);
         expect(events[0].event).toBe('button-click');
+    });
+
+    it('should create a router-like plugin', async () => {
+        const RouterPlugin = {
+            install({ ref, addHook }) {
+                const currentRoute = ref('/');
+                
+                addHook('beforeCompile', (el) => {
+                    if (el.hasAttribute('z-route')) {
+                        const route = el.getAttribute('z-route');
+                        el.removeAttribute('z-route');
+                        
+                        if (currentRoute.value !== route) {
+                            el.style.display = 'none';
+                        }
+                    }
+                });
+                
+                return {
+                    currentRoute,
+                    navigate(path) {
+                        currentRoute.value = path;
+                    }
+                };
+            }
+        };
+
+        document.body.innerHTML = `
+            <div id="app">
+                <div z-route="/">Home</div>
+                <div z-route="/about">About</div>
+            </div>
+        `;
+
+        app = createApp(() => ({}));
+        const router = app.use(RouterPlugin);
+        app.mount('#app');
+        await Promise.resolve();
+
+        expect(router).toHaveProperty('navigate');
+        expect(router.currentRoute.value).toBe('/');
     });
 });

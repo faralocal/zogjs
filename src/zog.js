@@ -396,31 +396,32 @@ export const compile = (el, scope, cs) => {
     runHooks('afterCompile', el, scope, cs);
 };
 
-// --- Plugin System ---
-const installedPlugins = new Set();
-
-export const use = (plugin, options = {}) => {
-    if (installedPlugins.has(plugin)) { console.warn?.('Plugin already installed:', plugin); return; }
-    if (typeof plugin.install !== 'function') { console.error?.('Plugin must have an install method:', plugin); return; }
-    installedPlugins.add(plugin);
-    try {
-        plugin.install({ 
-            reactive, ref, computed, watchEffect, createApp, 
-            addHook, removeHook,
-            utils: { isObj, evalExp, Dep, ReactiveEffect, Scope, compile }
-        }, options);
-    } catch (err) { 
-        console.error?.('Plugin installation failed:', plugin, err); 
-        runHooks('onError', err, 'plugin', plugin);
-    }
-};
 
 export const nextTick = fn => Promise.resolve().then(fn);
 
 // --- App ---
 export const createApp = setup => {
     let rootScope = null;
+    const appContext = { plugins: new Set() };
+
     return {
+        use(plugin, options = {}) {
+            if (appContext.plugins.has(plugin)) return this;
+            if (typeof plugin.install !== 'function') { console.error?.('Plugin must have an install method'); return this; }
+            appContext.plugins.add(plugin);
+            let pluginApi = null;
+            try {
+                pluginApi = plugin.install({
+                    reactive, ref, computed, watchEffect, createApp,
+                    addHook, removeHook,
+                    utils: { isObj, evalExp, Dep, ReactiveEffect, Scope, compile }
+                }, options);
+            } catch (err) {
+                console.error?.('Plugin installation failed:', err);
+                runHooks('onError', err, 'plugin', plugin);
+            }
+            return pluginApi || this;
+        },
         mount(sel) {
             const root = document.querySelector(sel);
             if (!root) return console.error(`Target not found: ${sel}`);
