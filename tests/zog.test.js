@@ -2915,3 +2915,130 @@ describe('Real-World Plugin Examples', () => {
         expect(router.currentRoute.value).toBe('/');
     });
 });
+
+
+
+describe('Array Reactivity - Nested Property Tracking', () => {
+    let app;
+    const afterEach = (fn) => fn;
+
+    afterEach(() => {
+        app?.unmount();
+    });
+
+    it('should update computed when mutating nested object properties in filter', async () => {
+        const todos = reactive([
+            { text: 'a', done: false },
+            { text: 'b', done: false }
+        ]);
+
+        let computedRuns = 0;
+        const remaining = computed(() => {
+            computedRuns++;
+            return todos.filter(t => !t.done).length;
+        });
+
+        expect(remaining.value).toBe(2);
+        expect(computedRuns).toBe(1);
+
+        // ✅ This SHOULD trigger recomputation
+        todos[0].done = true;
+        await Promise.resolve();
+
+        expect(remaining.value).toBe(1);
+        expect(computedRuns).toBe(2);
+
+        todos[1].done = true;
+        await Promise.resolve();
+
+        expect(remaining.value).toBe(0);
+        expect(computedRuns).toBe(3);
+    });
+
+    it('should track dependencies in map callback', async () => {
+        const items = reactive([
+            { value: 10, multiplier: 2 },
+            { value: 20, multiplier: 3 }
+        ]);
+
+        let runs = 0;
+        const results = computed(() => {
+            runs++;
+            return items.map(item => item.value * item.multiplier);
+        });
+
+        expect(results.value[0]).toBe(20);
+        expect(results.value[1]).toBe(60);
+        expect(runs).toBe(1);
+
+        // Change nested property
+        items[0].multiplier = 5;
+        await Promise.resolve();
+
+        expect(results.value[0]).toBe(50);
+        expect(runs).toBe(2);
+    });
+
+    it('should work with complex filter + map chains', async () => {
+        const products = reactive([
+            { name: 'A', price: 100, active: true },
+            { name: 'B', price: 200, active: false },
+            { name: 'C', price: 150, active: true }
+        ]);
+
+        let runs = 0;
+        const activePrices = computed(() => {
+            runs++;
+            return products
+                .filter(p => p.active)
+                .map(p => p.price);
+        });
+
+        expect(activePrices.value).toEqual([100, 150]);
+        expect(runs).toBe(1);
+
+        // Toggle active status
+        products[1].active = true;
+        await Promise.resolve();
+
+        expect(activePrices.value).toEqual([100, 200, 150]);
+        expect(runs).toBe(2);
+
+        // Change price of active item
+        products[0].price = 120;
+        await Promise.resolve();
+
+        expect(activePrices.value).toEqual([120, 200, 150]);
+        expect(runs).toBe(3);
+    });
+
+    it('should handle array mutations efficiently', async () => {
+        const items = reactive([
+            { id: 1, done: false },
+            { id: 2, done: false }
+        ]);
+
+        let filterRuns = 0;
+        const active = computed(() => {
+            filterRuns++;
+            return items.filter(i => !i.done);
+        });
+
+        expect(active.value.length).toBe(2);
+        expect(filterRuns).toBe(1);
+
+        // Push should trigger once
+        items.push({ id: 3, done: false });
+        await Promise.resolve();
+
+        expect(active.value.length).toBe(3);
+        expect(filterRuns).toBe(2);
+
+        // Nested property change should trigger
+        items[0].done = true;
+        await Promise.resolve();
+
+        expect(active.value.length).toBe(2);
+        expect(filterRuns).toBe(3);
+    });
+});

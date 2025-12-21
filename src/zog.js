@@ -95,16 +95,29 @@ export const reactive = target => {
     const getDep = k => { let d = depsMap.get(k); return d || (depsMap.set(k, d = new Dep()), d); };
 
     const createArrayMethod = method => {
-        const isMutating = arrayMutators.has(method), isIterating = arrayIterators.has(method);
+        const isMut = arrayMutators.has(method);
+        const isIter = arrayIterators.has(method);
+
         return function (...args) {
             const raw = this[RAW];
-            if (isIterating) { iterationDep.depend(); getDep('length').depend(); }
-            const result = raw[method].apply(raw, args.map(a => isObj(a) && a[IS_REACTIVE] ? a[RAW] : a));
-            if (isMutating) {
-                iterationDep.notify(); getDep('length').notify();
-                if (method === 'sort' || method === 'reverse') for (let i = 0; i < raw.length; i++) getDep(String(i)).notify();
+
+            // Track for iterators
+            if (isIter) { iterationDep.depend(); getDep('length').depend(); }
+
+            // Execute: mutators on raw, others on proxy
+            const res = isMut
+                ? raw[method].apply(raw, args.map(a => isObj(a) && a[IS_REACTIVE] ? a[RAW] : a))
+                : Array.prototype[method].apply(this, args);
+
+            // Notify for mutations
+            if (isMut) {
+                iterationDep.notify();
+                getDep('length').notify();
+                if (method === 'sort' || method === 'reverse')
+                    for (let i = 0; i < raw.length; i++) getDep(String(i)).notify();
             }
-            return isObj(result) && !result[IS_REACTIVE] ? reactive(result) : result;
+
+            return isObj(res) && !res[IS_REACTIVE] ? reactive(res) : res;
         };
     };
 
