@@ -1,11 +1,12 @@
 /**
- * Zog.js v0.4.1 - Full reactivity with minimal code size + Hook System
- * Fixes: error handling, z-for index bug, beforeEffect hook
+ * Zog.js v0.4.2 - Full reactivity with minimal code size + Hook System
+ * Fixes: ownKeys tracking, iterator reactivity, inline event ref updates, effect cleanup on unmount
  */
 
 // --- Reactivity Core ---
 let activeEffect = null;
 const effectStack = [];
+let currentScope = null;
 
 class Dep {
     subs = new Set();
@@ -81,7 +82,7 @@ class ReactiveEffect {
 export const watchEffect = (fn, opts = {}) => {
     const effect = new ReactiveEffect(fn, opts.scheduler);
     effect.run();
-    return () => effect.stop();
+    const stop = () => effect.stop(); currentScope && currentScope.addEffect(stop); return stop;
 };
 
 // --- Deep Reactivity ---
@@ -120,7 +121,7 @@ export const reactive = target => {
                 const wrapped = targetVal && targetVal[RAW] ? targetVal[RAW] : targetVal;
                 res = Array.prototype[method].call(raw, wrapped, ...args.slice(1));
             } else {
-                res = Array.prototype[method].apply(raw, args);
+                res = Array.prototype[method].apply(isMut ? raw : this, args);
             }
 
             if (isMut) {
@@ -154,7 +155,7 @@ export const reactive = target => {
             if (!hadKey || !Object.is(old, v)) {
                 const dep = getDep(k);
                 dep.notify();
-                if (isArray && (k === 'length' || String(+k) === k)) iterationDep.notify();
+                if (!hadKey || (isArray && (k === 'length' || String(+k) === k))) iterationDep.notify();
             }
             return res;
         },
@@ -164,7 +165,7 @@ export const reactive = target => {
             if (hadKey) {
                 const dep = getDep(k);
                 dep.notify();
-                if (isArray) iterationDep.notify();
+                iterationDep.notify();
             }
             return res;
         },
@@ -409,12 +410,8 @@ export const compile = (el, scope, cs) => {
                 const handler = scope[value];
                 if (typeof handler === 'function') handler(e);
                 else try {
-                    const keys = Object.keys(scope);
-                    const args = keys.map(k => {
-                        const v = scope[k];
-                        return v && v._isRef ? v.value : v;
-                    });
-                    Function(...keys, 'e', `"use strict";${value}`)(...args, e);
+                    const ctx = new Proxy(scope, { has: (t, k) => k in t, get: (t, k) => { const v = t[k]; return v && v._isRef ? (isObj(v.value) ? v.value : ({ get value() { return v.value; }, set value(n) { v.value = n; }, valueOf() { return v.value; }, toString() { return String(v.value); } })) : v; }, set: (t, k, n) => { const v = t[k]; v && v._isRef ? v.value = n : t[k] = n; return true; } });
+                    Function('ctx', 'e', `with(ctx){${value}}`)(ctx, e);
                 } catch (err) {
                     console.error?.('Event error:', err);
                     runHooks('onError', err, 'event', { name, value });
@@ -486,8 +483,8 @@ export const createApp = setup => {
             const el = typeof root === 'string' ? document.querySelector(root) : root;
             if (!el) { console.error?.('Root element not found:', root); return; }
 
-            const data = (setup && setup()) || {};
-            rootScope = new Scope(data);
+            rootScope = new Scope({}); currentScope = rootScope;
+            rootScope.data = (setup && setup()) || {}; currentScope = null;
             try {
                 compile(el, rootScope.data, rootScope);
             } catch (err) {
