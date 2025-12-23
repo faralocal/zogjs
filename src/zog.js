@@ -1,5 +1,6 @@
 /**
- * Zog.js v0.4.0 - Full reactivity with minimal code size + Hook System
+ * Zog.js v0.4.1 - Full reactivity with minimal code size + Hook System
+ * Fixes: error handling, z-for index bug, beforeEffect hook
  */
 
 // --- Reactivity Core ---
@@ -34,7 +35,7 @@ const flushEffects = () => {
     try {
         for (let i = 0; i < effectQueue.length; i++) {
             const e = effectQueue[i];
-            if (e.active) e.run();
+            if (e.active) try { e.run(); } catch (err) { console.error?.('Effect error:', err); runHooks('onError', err, 'effect', e); }
         }
     } finally {
         effectQueue.length = 0;
@@ -58,6 +59,7 @@ class ReactiveEffect {
         try {
             effectStack.push(this);
             activeEffect = this;
+            runHooks('beforeEffect', this);
             return this.fn();
         } finally {
             effectStack.pop();
@@ -371,10 +373,10 @@ export const compile = (el, scope, cs) => {
 
                 if (existing) {
                     existing.itemRef.value = val;
-                    existing.indexRef = i;
+                    existing.indexRef.value = i;
                     newItemsMap.set(key, existing);
                 } else {
-                    const clone = el.cloneNode(true), itemRef = ref(val), indexRef = i;
+                    const clone = el.cloneNode(true), itemRef = ref(val), indexRef = ref(i);
                     const s = new Scope({ ...scope, [itemName]: itemRef, [indexName]: indexRef });
                     compile(clone, s.data, s);
                     newItemsMap.set(key, { clone, scope: s, itemRef, indexRef });
