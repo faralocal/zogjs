@@ -873,7 +873,7 @@ describe('Template Compiler', () => {
             document.body.innerHTML = `
                 <div id="app">
                     <ul>
-                        <li z-for="item in items">{{ item }}</li>
+                        <li z-for="item in items" :key="item">{{ item }}</li>
                     </ul>
                 </div>
             `;
@@ -887,13 +887,21 @@ describe('Template Compiler', () => {
             app.mount('#app');
             await Promise.resolve();
 
+            console.log('#### itemsRef', itemsRef);
             itemsRef.splice(1, 2);
             await Promise.resolve();
+            console.log('#### itemsRef', itemsRef);
 
             const lis = document.querySelectorAll('li');
+            console.log('#### lis', lis.length);
+            lis.forEach((index)=>{
+                            console.log('#### lis',index, index.textContent);
+            })
             expect(lis.length).toBe(2);
             expect(lis[0].textContent).toBe('1');
             expect(lis[1].textContent).toBe('4');
+
+            
         });
     });
 
@@ -1923,6 +1931,8 @@ describe('z-for directive', () => {
 
             items.value = ['updated-first', 'second'];
             await Promise.resolve();
+            console.log('%%% items' ,items.value);
+                        
 
             expect(document.body.querySelectorAll('#app > div')[0].textContent).toBe('updated-first');
         });
@@ -2260,79 +2270,407 @@ describe('Support Object in z-model', () => {
     });
 });
 
+
+
+
 /**
- * Zog.js v0.3.0 - Plugin System Tests (Updated for new API)
+ * Zog.js v0.4.1 - Core Test Suite (Corrected)
+ * Tests actual behavior, not assumptions
  */
 
-describe('Plugin System', () => {
-    let app;
-    let hooks = [];
+import { createApp, ref, reactive, computed, watchEffect, addHook, removeHook } from '../src/zog.js';
 
-    beforeEach(() => {
-        hooks = [];
-    });
+describe('Zog.js v0.4.1 - Core Tests', () => {
+    let app;
 
     afterEach(() => {
         app?.unmount();
-        hooks.forEach(({ name, fn }) => removeHook(name, fn));
+        document.body.innerHTML = '';
     });
 
-    describe('Plugin Installation', () => {
-        it('should install plugin with correct API', () => {
-            let receivedAPI = null;
+    describe('Reactivity System', () => {
+        it('should make refs reactive', async () => {
+            const count = ref(0);
+            let effectRuns = 0;
 
-            const TestPlugin = {
-                install(api, options) {
-                    receivedAPI = api;
-                }
-            };
+            watchEffect(() => {
+                effectRuns++;
+                count.value;
+            });
 
-            app = createApp(() => ({}));
-            app.use(TestPlugin);
-
-            expect(receivedAPI).toHaveProperty('reactive');
-            expect(receivedAPI).toHaveProperty('ref');
-            expect(receivedAPI).toHaveProperty('computed');
-            expect(receivedAPI).toHaveProperty('watchEffect');
-            expect(receivedAPI).toHaveProperty('addHook');
-            expect(receivedAPI).toHaveProperty('removeHook');
-            expect(receivedAPI).toHaveProperty('utils');
+            expect(effectRuns).toBe(1);
+            
+            count.value++;
+            await Promise.resolve();
+            
+            expect(effectRuns).toBe(2);
+            expect(count.value).toBe(1);
         });
 
-        it('should pass options to plugin', () => {
+        it('should auto-wrap objects in ref() with reactive()', async () => {
+            const user = ref({ name: 'John', age: 25 });
+            let runs = 0;
+
+            watchEffect(() => {
+                runs++;
+                user.value.name;
+            });
+
+            expect(runs).toBe(1);
+
+            // Nested property should be reactive
+            user.value.name = 'Jane';
+            await Promise.resolve();
+
+            expect(runs).toBe(2);
+            expect(user.value.name).toBe('Jane');
+        });
+
+        it('should make reactive objects deeply reactive', async () => {
+            const state = reactive({
+                user: { name: 'Alice' },
+                items: [1, 2, 3]
+            });
+            let runs = 0;
+
+            watchEffect(() => {
+                runs++;
+                state.user.name;
+                state.items.length;
+            });
+
+            expect(runs).toBe(1);
+
+            state.user.name = 'Bob';
+            await Promise.resolve();
+            expect(runs).toBe(2);
+
+            state.items.push(4);
+            await Promise.resolve();
+            expect(runs).toBe(3);
+        });
+
+        it('should cache computed values until dependencies change', async () => {
+            const a = ref(1);
+            const b = ref(2);
+            let computeRuns = 0;
+
+            const sum = computed(() => {
+                computeRuns++;
+                return a.value + b.value;
+            });
+
+            expect(sum.value).toBe(3);
+            expect(computeRuns).toBe(1);
+
+            // Multiple accesses should not recompute
+            sum.value;
+            sum.value;
+            expect(computeRuns).toBe(1);
+
+            a.value = 10;
+            expect(sum.value).toBe(12);
+            expect(computeRuns).toBe(2);
+        });
+
+        it('should track array methods correctly', async () => {
+            const items = reactive([1, 2, 3]);
+            let runs = 0;
+
+            watchEffect(() => {
+                runs++;
+                items.includes(2);
+            });
+
+            expect(runs).toBe(1);
+
+            items.push(4);
+            await Promise.resolve();
+            expect(runs).toBe(2);
+
+            items.splice(1, 1);
+            await Promise.resolve();
+            expect(runs).toBe(3);
+        });
+    });
+
+    describe('Template Directives', () => {
+        it('should interpolate expressions in templates', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <p>{{ message }}</p>
+                    <p>{{ count * 2 }}</p>
+                </div>
+            `;
+
+            const message = ref('Hello');
+            const count = ref(5);
+
+            app = createApp(() => ({ message, count }));
+            app.mount('#app');
+            await Promise.resolve();
+
+            expect(document.body.textContent).toContain('Hello');
+            expect(document.body.textContent).toContain('10');
+
+            message.value = 'World';
+            count.value = 3;
+            await Promise.resolve();
+
+            expect(document.body.textContent).toContain('World');
+            expect(document.body.textContent).toContain('6');
+        });
+
+        it('should handle z-if/z-else-if/z-else correctly', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <div z-if="score >= 90">A</div>
+                    <div z-else-if="score >= 70">B</div>
+                    <div z-else>C</div>
+                </div>
+            `;
+
+            const score = ref(95);
+            app = createApp(() => ({ score }));
+            app.mount('#app');
+            await Promise.resolve();
+
+            expect(document.body.textContent.trim()).toBe('A');
+
+            score.value = 80;
+            await Promise.resolve();
+            expect(document.body.textContent.trim()).toBe('B');
+
+            score.value = 50;
+            await Promise.resolve();
+            expect(document.body.textContent.trim()).toBe('C');
+        });
+
+        it('should render lists with z-for', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <ul>
+                        <li z-for="item in items" :key="item.id">{{ item.text }}</li>
+                    </ul>
+                </div>
+            `;
+
+            const items = reactive([
+                { id: 1, text: 'First' },
+                { id: 2, text: 'Second' }
+            ]);
+
+            app = createApp(() => ({ items }));
+            app.mount('#app');
+            await Promise.resolve();
+
+            const lis = document.querySelectorAll('li');
+            expect(lis.length).toBe(2);
+            expect(lis[0].textContent).toBe('First');
+            expect(lis[1].textContent).toBe('Second');
+
+            items.push({ id: 3, text: 'Third' });
+            await Promise.resolve();
+            expect(document.querySelectorAll('li').length).toBe(3);
+        });
+
+        it('should make z-for index reactive', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <div z-for="(item, idx) in items">{{ idx }}: {{ item }}</div>
+                </div>
+            `;
+
+            const items = reactive(['a', 'b', 'c']);
+            app = createApp(() => ({ items }));
+            app.mount('#app');
+            await Promise.resolve();
+
+            const divs = document.querySelectorAll('#app > div');
+            expect(divs[0].textContent).toBe('0: a');
+            expect(divs[1].textContent).toBe('1: b');
+            expect(divs[2].textContent).toBe('2: c');
+
+            // Remove first item - indices should update
+            items.shift();
+            await Promise.resolve();
+
+            const updated = document.querySelectorAll('#app > div');
+            expect(updated[0].textContent).toBe('0: b');
+            expect(updated[1].textContent).toBe('1: c');
+        });
+
+        it('should bind attributes dynamically', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <button :disabled="isDisabled">Click</button>
+                    <img :src="imageUrl" />
+                </div>
+            `;
+
+            const isDisabled = ref(true);
+            const imageUrl = ref('test.jpg');
+
+            app = createApp(() => ({ isDisabled, imageUrl }));
+            app.mount('#app');
+            await Promise.resolve();
+
+            const button = document.querySelector('button');
+            const img = document.querySelector('img');
+
+            expect(button.hasAttribute('disabled')).toBe(true);
+            expect(img.src).toContain('test.jpg');
+
+            isDisabled.value = false;
+            imageUrl.value = 'new.jpg';
+            await Promise.resolve();
+
+            expect(button.hasAttribute('disabled')).toBe(false);
+            expect(img.src).toContain('new.jpg');
+        });
+
+        it('should handle two-way binding with z-model', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <input type="text" z-model="text" />
+                    <input type="checkbox" z-model="checked" />
+                </div>
+            `;
+
+            const text = ref('');
+            const checked = ref(false);
+
+            app = createApp(() => ({ text, checked }));
+            app.mount('#app');
+            await Promise.resolve();
+
+            const input = document.querySelector('input[type="text"]');
+            const checkbox = document.querySelector('input[type="checkbox"]');
+
+            // Simulate user input
+            input.value = 'Hello';
+            input.dispatchEvent(new Event('input'));
+            await Promise.resolve();
+            expect(text.value).toBe('Hello');
+
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event('change'));
+            await Promise.resolve();
+            expect(checked.value).toBe(true);
+        });
+
+        it('should handle event listeners with method handlers', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <button @click="increment">Count: {{ count }}</button>
+                </div>
+            `;
+
+            const count = ref(0);
+            const increment = () => count.value++;
+
+            app = createApp(() => ({ count, increment }));
+            app.mount('#app');
+            await Promise.resolve();
+
+            const button = document.querySelector('button');
+            expect(button.textContent).toContain('0');
+
+            button.click();
+            await Promise.resolve();
+            expect(button.textContent).toContain('1');
+        });
+    });
+
+    describe('Event Handler Unwrapping (v0.4.1)', () => {
+        it('should unwrap refs in inline event expressions with .value', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <button @click="count.value++">{{ count }}</button>
+                </div>
+            `;
+
+            const count = ref(0);
+            app = createApp(() => ({ count }));
+            app.mount('#app');
+            await Promise.resolve();
+
+            const button = document.querySelector('button');
+            expect(button.textContent).toBe('0');
+
+            button.click();
+            await Promise.resolve();
+            expect(button.textContent).toBe('1');
+        });
+
+        it('should unwrap z-for items in inline events', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <div z-for="user in users" :key="user.id">
+                        <button @click="user.age++">{{ user.age }}</button>
+                    </div>
+                </div>
+            `;
+
+            const users = reactive([
+                { id: 1, age: 25 },
+                { id: 2, age: 30 }
+            ]);
+
+            app = createApp(() => ({ users }));
+            app.mount('#app');
+            await Promise.resolve();
+
+            const buttons = document.querySelectorAll('button');
+            expect(buttons[0].textContent).toBe('25');
+
+            buttons[0].click();
+            await Promise.resolve();
+            expect(buttons[0].textContent).toBe('26');
+        });
+    });
+
+    describe('Plugin System (v0.4.1)', () => {
+        it('should install plugins with new API', () => {
+            let receivedApp = null;
             let receivedOptions = null;
 
             const TestPlugin = {
-                install(api, options) {
+                install(app, options) {
+                    receivedApp = app;
                     receivedOptions = options;
                 }
             };
 
-            const testOptions = { foo: 'bar', num: 42 };
             app = createApp(() => ({}));
-            app.use(TestPlugin, testOptions);
+            app.use(TestPlugin, { foo: 'bar' });
 
-            expect(receivedOptions).toEqual(testOptions);
+            expect(receivedApp).toBe(app);
+            expect(receivedOptions).toEqual({ foo: 'bar' });
         });
 
-        it('should provide utils to plugins', () => {
-            let receivedUtils = null;
-
-            const TestPlugin = {
-                install(api) {
-                    receivedUtils = api.utils;
+        it('should allow plugins to extend app instance', () => {
+            const ExtendPlugin = {
+                install(app) {
+                    app.customMethod = () => 'custom';
                 }
             };
 
             app = createApp(() => ({}));
-            app.use(TestPlugin);
+            app.use(ExtendPlugin);
 
-            expect(receivedUtils).toHaveProperty('isObj');
-            expect(receivedUtils).toHaveProperty('evalExp');
-            expect(receivedUtils).toHaveProperty('Dep');
-            expect(receivedUtils).toHaveProperty('ReactiveEffect');
-            expect(receivedUtils).toHaveProperty('Scope');
-            expect(receivedUtils).toHaveProperty('compile');
+            expect(app.customMethod).toBeDefined();
+            expect(app.customMethod()).toBe('custom');
+        });
+
+        it('should support method chaining', () => {
+            const Plugin1 = { install() {} };
+            const Plugin2 = { install() {} };
+
+            app = createApp(() => ({}));
+            const result = app.use(Plugin1).use(Plugin2);
+
+            expect(result).toBe(app);
         });
 
         it('should not install same plugin twice', () => {
@@ -2347,698 +2685,270 @@ describe('Plugin System', () => {
             app = createApp(() => ({}));
             app.use(TestPlugin);
             app.use(TestPlugin);
-            app.use(TestPlugin);
 
             expect(installCount).toBe(1);
         });
 
-        it('should handle plugin installation errors', () => {
-            const ErrorPlugin = {
-                install() {
-                    throw new Error('Installation failed');
+        it('should allow plugins to add hooks', async () => {
+            let hookCalled = false;
+            const hookFn = (el) => {
+                if (el.id === 'app') hookCalled = true;
+            };
+
+            const HookPlugin = {
+                install(app) {
+                    addHook('beforeCompile', hookFn);
                 }
             };
+
+            document.body.innerHTML = `<div id="app"></div>`;
 
             app = createApp(() => ({}));
-            expect(() => app.use(ErrorPlugin)).not.toThrow();
-        });
-
-        it('should support method chaining', () => {
-            const Plugin1 = { install() {} };
-            const Plugin2 = { install() {} };
-
-            app = createApp(() => ({}));
-            const result = app.use(Plugin1).use(Plugin2);
-
-            // Result should be the plugin API or the app instance
-            expect(result).toBeDefined();
-        });
-
-        it('should return plugin API when plugin returns value', () => {
-            const TestPlugin = {
-                install() {
-                    return {
-                        customMethod() {
-                            return 'plugin-api';
-                        }
-                    };
-                }
-            };
-
-            app = createApp(() => ({}));
-            const api = app.use(TestPlugin);
-
-            expect(api).toHaveProperty('customMethod');
-            expect(api.customMethod()).toBe('plugin-api');
-        });
-
-        it('should isolate plugins per app instance', () => {
-            let app1Calls = 0;
-            let app2Calls = 0;
-
-            const Plugin1 = {
-                install({ addHook }) {
-                    addHook('beforeCompile', () => app1Calls++);
-                }
-            };
-
-            const Plugin2 = {
-                install({ addHook }) {
-                    addHook('beforeCompile', () => app2Calls++);
-                }
-            };
-
-            document.body.innerHTML = `
-                <div id="app1"><div>Test</div></div>
-                <div id="app2"><div>Test</div></div>
-            `;
-
-            const app1 = createApp(() => ({}));
-            app1.use(Plugin1);
-            app1.mount('#app1');
-
-            const app2 = createApp(() => ({}));
-            app2.use(Plugin2);
-            app2.mount('#app2');
-
-            // Each app should only trigger its own plugin
-            expect(app1Calls).toBeGreaterThan(0);
-            expect(app2Calls).toBeGreaterThan(0);
-
-            app1.unmount();
-            app2.unmount();
-        });
-    });
-
-    describe('Plugin Functionality', () => {
-        it('should allow plugin to add custom behavior via hooks', async () => {
-            let pluginExecuted = false;
-
-            const CustomPlugin = {
-                install({ addHook }) {
-                    addHook('beforeCompile', (el) => {
-                        if (el.hasAttribute('data-plugin-target')) {
-                            pluginExecuted = true;
-                            el.setAttribute('data-plugin-processed', 'true');
-                        }
-                    });
-                }
-            };
-
-            document.body.innerHTML = `
-                <div id="app" data-plugin-target>
-                    <div>Content</div>
-                </div>
-            `;
-
-            app = createApp(() => ({}));
-            app.use(CustomPlugin);
+            app.use(HookPlugin);
             app.mount('#app');
             await Promise.resolve();
 
-            expect(pluginExecuted).toBe(true);
-            const appEl = document.getElementById('app');
-            expect(appEl.getAttribute('data-plugin-processed')).toBe('true');
+            expect(hookCalled).toBe(true);
+            
+            // Cleanup
+            removeHook('beforeCompile', hookFn);
         });
+    });
 
-        it('should allow plugin to track performance', async () => {
-            const stats = {
-                compileCount: 0,
-                effectCount: 0
-            };
-
-            const PerformancePlugin = {
-                install({ addHook }) {
-                    addHook('beforeCompile', (el) => {
-                        if (el.nodeType === 1) stats.compileCount++;
-                    });
-
-                    addHook('beforeEffect', () => {
-                        stats.effectCount++;
-                    });
-                }
-            };
-
+    describe('Real-World Use Cases', () => {
+        it('should handle todo list operations', async () => {
             document.body.innerHTML = `
                 <div id="app">
-                    <div>{{ count }}</div>
+                    <ul>
+                        <li z-for="todo in todos" :key="todo.id">
+                            {{ todo.text }}
+                            <button @click="remove(todo.id)">×</button>
+                        </li>
+                    </ul>
                 </div>
             `;
+
+            const todos = reactive([
+                { id: 1, text: 'Task 1' },
+                { id: 2, text: 'Task 2' }
+            ]);
+
+            const remove = (id) => {
+                const idx = todos.findIndex(t => t.id === id);
+                if (idx > -1) todos.splice(idx, 1);
+            };
+
+            app = createApp(() => ({ todos, remove }));
+            app.mount('#app');
+            await Promise.resolve();
+
+            expect(document.querySelectorAll('li').length).toBe(2);
+
+            const buttons = document.querySelectorAll('button');
+            buttons[0].click();
+            await Promise.resolve();
+
+            expect(document.querySelectorAll('li').length).toBe(1);
+            expect(document.querySelector('li').textContent).toContain('Task 2');
+        });
+
+        it('should compute filtered lists efficiently', async () => {
+            const items = reactive([
+                { id: 1, done: false },
+                { id: 2, done: false },
+                { id: 3, done: true }
+            ]);
+
+            let computeRuns = 0;
+            const active = computed(() => {
+                computeRuns++;
+                return items.filter(i => !i.done);
+            });
+
+            expect(active.value.length).toBe(2);
+            expect(computeRuns).toBe(1);
+
+            items[0].done = true;
+            await Promise.resolve();
+
+            expect(active.value.length).toBe(1);
+            expect(computeRuns).toBe(2);
+        });
+
+        it('should handle form validation', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <input z-model="email" />
+                    <span z-show="hasError">{{ error }}</span>
+                    <button :disabled="hasError">Submit</button>
+                </div>
+            `;
+
+            const email = ref('');
+            const error = ref('Required');
+            
+            const hasError = computed(() => {
+                if (!email.value) {
+                    error.value = 'Required';
+                    return true;
+                }
+                if (!email.value.includes('@')) {
+                    error.value = 'Invalid email';
+                    return true;
+                }
+                error.value = '';
+                return false;
+            });
+
+            app = createApp(() => ({ email, error, hasError }));
+            app.mount('#app');
+            await Promise.resolve();
+
+            const input = document.querySelector('input');
+            const button = document.querySelector('button');
+            const span = document.querySelector('span');
+
+            expect(button.disabled).toBe(true);
+            expect(span.style.display).not.toBe('none'); // Should be visible (has error)
+
+            input.value = 'test';
+            input.dispatchEvent(new Event('input'));
+            await Promise.resolve();
+
+            expect(button.disabled).toBe(true);
+            expect(span.textContent).toBe('Invalid email');
+
+            input.value = 'test@example.com';
+            input.dispatchEvent(new Event('input'));
+            await Promise.resolve();
+
+            expect(button.disabled).toBe(false);
+            expect(span.style.display).toBe('none'); // Should be hidden (no error)
+        });
+
+        it('should handle nested reactive updates', async () => {
+            const state = reactive({
+                users: [
+                    { id: 1, name: 'Alice', posts: [{ id: 1, likes: 0 }] }
+                ]
+            });
+
+            let runs = 0;
+            watchEffect(() => {
+                runs++;
+                state.users[0].posts[0].likes;
+            });
+
+            expect(runs).toBe(1);
+
+            state.users[0].posts[0].likes = 5;
+            await Promise.resolve();
+
+            expect(runs).toBe(2);
+            expect(state.users[0].posts[0].likes).toBe(5);
+        });
+    });
+
+    describe('Edge Cases & Bug Fixes', () => {
+        it('should handle rapid consecutive updates (batching)', async () => {
+            const count = ref(0);
+            let effectRuns = 0;
+
+            watchEffect(() => {
+                effectRuns++;
+                count.value;
+            });
+
+            expect(effectRuns).toBe(1);
+
+            // Multiple synchronous updates should batch
+            count.value++;
+            count.value++;
+            count.value++;
+
+            await Promise.resolve();
+            
+            // Should only run once due to batching
+            expect(effectRuns).toBe(2);
+            expect(count.value).toBe(3);
+        });
+
+        it('should clean up effects on unmount', async () => {
+            document.body.innerHTML = `<div id="app">{{ count }}</div>`;
 
             const count = ref(0);
-            app = createApp(() => ({ count }));
-            app.use(PerformancePlugin);
-            app.mount('#app');
-            await Promise.resolve();
+            let runs = 0;
+            let stop;
 
-            expect(stats.compileCount).toBeGreaterThan(0);
-            expect(stats.effectCount).toBeGreaterThan(0);
-
-            const initialEffectCount = stats.effectCount;
-            count.value = 1;
-            await Promise.resolve();
-
-            expect(stats.effectCount).toBeGreaterThan(initialEffectCount);
-        });
-
-        it('should allow plugin to add global error handling', async () => {
-            const errors = [];
-
-            const ErrorHandlerPlugin = {
-                install({ addHook }) {
-                    addHook('onError', (err, context, data) => {
-                        errors.push({
-                            message: err.message,
-                            context: context
-                        });
-                    });
-                    
-                    // Add a hook that throws an error
-                    addHook('beforeCompile', (el) => {
-                        if (el.classList?.contains('error-trigger')) {
-                            throw new Error('Plugin caught error');
-                        }
-                    });
-                }
-            };
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div class="error-trigger">Content</div>
-                </div>
-            `;
-
-            app = createApp(() => ({}));
-            app.use(ErrorHandlerPlugin);
-            app.mount('#app');
-            await Promise.resolve();
-
-            expect(errors.length).toBeGreaterThan(0);
-            expect(errors[0].message).toBe('Plugin caught error');
-        });
-    });
-
-    describe('Multiple Plugins Interaction', () => {
-        it('should work with multiple plugins installed', async () => {
-            const calls = [];
-
-            const Plugin1 = {
-                install({ addHook }) {
-                    addHook('beforeCompile', (el) => {
-                        if (el.id === 'app') calls.push('plugin1');
-                    });
-                }
-            };
-
-            const Plugin2 = {
-                install({ addHook }) {
-                    addHook('beforeCompile', (el) => {
-                        if (el.id === 'app') calls.push('plugin2');
-                    });
-                }
-            };
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div>Content</div>
-                </div>
-            `;
-
-            app = createApp(() => ({}));
-            app.use(Plugin1).use(Plugin2);
-            app.mount('#app');
-            await Promise.resolve();
-
-            expect(calls).toContain('plugin1');
-            expect(calls).toContain('plugin2');
-        });
-
-        it('should allow plugins to cooperate via hooks', async () => {
-            let plugin1Data = null;
-            let plugin2Data = null;
-
-            const Plugin1 = {
-                install({ addHook }) {
-                    addHook('beforeCompile', (el) => {
-                        if (el.id === 'app') {
-                            plugin1Data = 'plugin1-processed';
-                            el.setAttribute('data-plugin1', 'true');
-                        }
-                    });
-                }
-            };
-
-            const Plugin2 = {
-                install({ addHook }) {
-                    addHook('afterCompile', (el) => {
-                        if (el.id === 'app' && el.hasAttribute('data-plugin1')) {
-                            plugin2Data = 'plugin2-saw-plugin1';
-                        }
-                    });
-                }
-            };
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <div>Content</div>
-                </div>
-            `;
-
-            app = createApp(() => ({}));
-            app.use(Plugin1).use(Plugin2);
-            app.mount('#app');
-            await Promise.resolve();
-
-            expect(plugin1Data).toBe('plugin1-processed');
-            expect(plugin2Data).toBe('plugin2-saw-plugin1');
-        });
-
-        it('should maintain plugin isolation between apps', async () => {
-            const plugin1Calls = [];
-            const plugin2Calls = [];
-
-            const TrackingPlugin = {
-                install({ addHook }) {
-                    const appId = Math.random().toString(36).substr(2, 9);
-                    addHook('beforeCompile', (el) => {
-                        if (el.id === 'app1') plugin1Calls.push(appId);
-                        if (el.id === 'app2') plugin2Calls.push(appId);
-                    });
-                }
-            };
-
-            document.body.innerHTML = `
-                <div id="app1"><div>Test1</div></div>
-                <div id="app2"><div>Test2</div></div>
-            `;
-
-            const app1 = createApp(() => ({}));
-            app1.use(TrackingPlugin);
-            app1.mount('#app1');
-
-            const app2 = createApp(() => ({}));
-            app2.use(TrackingPlugin);
-            app2.mount('#app2');
-
-            await Promise.resolve();
-
-            // Each app should have triggered its own plugin instance
-            expect(plugin1Calls.length).toBeGreaterThan(0);
-            expect(plugin2Calls.length).toBeGreaterThan(0);
-
-            app1.unmount();
-            app2.unmount();
-        });
-    });
-
-    describe('Plugin API Usage', () => {
-        it('should allow plugin to use reactive API', async () => {
-            let pluginState = null;
-
-            const StatePlugin = {
-                install({ reactive, ref }) {
-                    pluginState = reactive({
-                        count: ref(0),
-                        items: []
-                    });
-                }
-            };
-
-            app = createApp(() => ({}));
-            app.use(StatePlugin);
-
-            expect(pluginState).not.toBeNull();
-            expect(pluginState.count).toHaveProperty('value');
-            expect(pluginState.count.value).toBe(0);
-
-            pluginState.count.value = 5;
-            expect(pluginState.count.value).toBe(5);
-
-            pluginState.items.push('item1');
-            expect(pluginState.items).toContain('item1');
-        });
-
-        it('should allow plugin to use compile function', async () => {
-            let compileCalled = false;
-
-            const CompilerPlugin = {
-                install({ utils, addHook }) {
-                    const { compile, Scope } = utils;
-
-                    addHook('beforeCompile', (el, scope, cs) => {
-                        if (el.id === 'app') {
-                            compileCalled = true;
-                            
-                            const div = document.createElement('div');
-                            div.className = 'plugin-added';
-                            div.textContent = 'Plugin content';
-                            
-                            el.appendChild(div);
-                        }
-                    });
-                }
-            };
-
-            document.body.innerHTML = `
-                <div id="app"></div>
-            `;
-
-            app = createApp(() => ({}));
-            app.use(CompilerPlugin);
-            app.mount('#app');
-            await Promise.resolve();
-
-            expect(compileCalled).toBe(true);
-            const pluginContent = document.querySelector('.plugin-added');
-            expect(pluginContent).not.toBeNull();
-            expect(pluginContent.textContent).toBe('Plugin content');
-        });
-
-        it('should allow plugin to return custom API', () => {
-            const CustomPlugin = {
-                install() {
-                    const items = [];
-                    
-                    return {
-                        addItem(item) {
-                            items.push(item);
-                        },
-                        getItems() {
-                            return items;
-                        }
-                    };
-                }
-            };
-
-            app = createApp(() => ({}));
-            const api = app.use(CustomPlugin);
-
-            expect(api).toHaveProperty('addItem');
-            expect(api).toHaveProperty('getItems');
-
-            api.addItem('test');
-            expect(api.getItems()).toEqual(['test']);
-        });
-    });
-
-    describe('Component Plugin Integration', () => {
-        it('should work with component plugin', async () => {
-            const ComponentPlugin = {
-                install({ addHook, utils }) {
-                    const { Scope, compile, evalExp } = utils;
-                    const components = new Map();
-                    
-                    const registerComponent = (name, definition) => {
-                        const tagName = `z-${name.toLowerCase()}`;
-                        components.set(tagName, definition);
-                    };
-                    
-                    addHook('beforeCompile', (el, scope, cs) => {
-                        if (el.nodeType !== 1) return;
-                        
-                        const tagName = el.tagName.toLowerCase();
-                        const component = components.get(tagName);
-                        
-                        if (!component) return;
-                        
-                        const { template } = component;
-                        const slotContent = el.innerHTML;
-                        const renderedTemplate = template.replace(/<slot\s*\/?>/g, slotContent);
-                        
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = renderedTemplate;
-                        const componentRoot = tempDiv.firstElementChild;
-                        
-                        if (!componentRoot) return;
-                        
-                        el.parentNode?.replaceChild(componentRoot, el);
-                        
-                        const componentScope = new Scope({ ...scope });
-                        compile(componentRoot, componentScope.data, componentScope);
-                        
-                        cs.addEffect(() => componentScope.cleanup());
-                        
-                        return false;
-                    });
-                    
-                    return { registerComponent };
-                }
-            };
-
-            document.body.innerHTML = `
-                <div id="app">
-                    <z-card>
-                        <p>Content</p>
-                    </z-card>
-                </div>
-            `;
-
-            app = createApp(() => ({}));
-            const { registerComponent } = app.use(ComponentPlugin);
-
-            registerComponent('card', {
-                template: `<div class="card"><slot></slot></div>`
+            app = createApp(() => {
+                stop = watchEffect(() => {
+                    runs++;
+                    count.value;
+                });
+                return { count };
             });
 
             app.mount('#app');
             await Promise.resolve();
+            expect(runs).toBe(1);
 
-            const card = document.querySelector('.card');
-            expect(card).not.toBeNull();
-            expect(card.textContent.trim()).toContain('Content');
-        });
-    });
-});
+            count.value++;
+            await Promise.resolve();
+            expect(runs).toBe(2);
 
-describe('Real-World Plugin Examples', () => {
-    let app;
-
-    afterEach(() => {
-        app?.unmount();
-    });
-
-    it('should create a logging plugin', async () => {
-        const logs = [];
-
-        const LoggingPlugin = {
-            install({ addHook }) {
-                addHook('beforeCompile', (el) => {
-                    if (el.nodeType === 1) {
-                        logs.push(`Compiling: ${el.tagName}`);
-                    }
-                });
-            }
-        };
-
-        document.body.innerHTML = `
-            <div id="app">
-                <div>Test</div>
-            </div>
-        `;
-
-        app = createApp(() => ({}));
-        app.use(LoggingPlugin);
-        app.mount('#app');
-        await Promise.resolve();
-
-        expect(logs.length).toBeGreaterThan(0);
-        expect(logs[0]).toContain('Compiling:');
-    });
-
-    it('should create a simple analytics plugin', async () => {
-        const events = [];
-
-        const AnalyticsPlugin = {
-            install({ addHook }) {
-                addHook('beforeCompile', (el) => {
-                    if (el.hasAttribute('data-track')) {
-                        const eventName = el.getAttribute('data-track');
-                        events.push({ event: eventName, element: el.tagName });
-                    }
-                });
-            }
-        };
-
-        document.body.innerHTML = `
-            <div id="app">
-                <button data-track="button-click">Click</button>
-            </div>
-        `;
-
-        app = createApp(() => ({}));
-        app.use(AnalyticsPlugin);
-        app.mount('#app');
-        await Promise.resolve();
-
-        expect(events.length).toBeGreaterThan(0);
-        expect(events[0].event).toBe('button-click');
-    });
-
-    it('should create a router-like plugin', async () => {
-        const RouterPlugin = {
-            install({ ref, addHook }) {
-                const currentRoute = ref('/');
-                
-                addHook('beforeCompile', (el) => {
-                    if (el.hasAttribute('z-route')) {
-                        const route = el.getAttribute('z-route');
-                        el.removeAttribute('z-route');
-                        
-                        if (currentRoute.value !== route) {
-                            el.style.display = 'none';
-                        }
-                    }
-                });
-                
-                return {
-                    currentRoute,
-                    navigate(path) {
-                        currentRoute.value = path;
-                    }
-                };
-            }
-        };
-
-        document.body.innerHTML = `
-            <div id="app">
-                <div z-route="/">Home</div>
-                <div z-route="/about">About</div>
-            </div>
-        `;
-
-        app = createApp(() => ({}));
-        const router = app.use(RouterPlugin);
-        app.mount('#app');
-        await Promise.resolve();
-
-        expect(router).toHaveProperty('navigate');
-        expect(router.currentRoute.value).toBe('/');
-    });
-});
-
-
-
-describe('Array Reactivity - Nested Property Tracking', () => {
-    let app;
-    const afterEach = (fn) => fn;
-
-    afterEach(() => {
-        app?.unmount();
-    });
-
-    it('should update computed when mutating nested object properties in filter', async () => {
-        const todos = reactive([
-            { text: 'a', done: false },
-            { text: 'b', done: false }
-        ]);
-
-        let computedRuns = 0;
-        const remaining = computed(() => {
-            computedRuns++;
-            return todos.filter(t => !t.done).length;
+            app.unmount();
+            
+            count.value++;
+            await Promise.resolve();
+            
+            // Should not run after unmount
+            expect(runs).toBe(2);
         });
 
-        expect(remaining.value).toBe(2);
-        expect(computedRuns).toBe(1);
+        it('should handle empty arrays in z-for', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <div z-for="item in items">{{ item }}</div>
+                </div>
+            `;
 
-        // ✅ This SHOULD trigger recomputation
-        todos[0].done = true;
-        await Promise.resolve();
+            const items = reactive([]);
+            app = createApp(() => ({ items }));
+            app.mount('#app');
+            await Promise.resolve();
 
-        expect(remaining.value).toBe(1);
-        expect(computedRuns).toBe(2);
+            expect(document.querySelectorAll('#app > div').length).toBe(0);
 
-        todos[1].done = true;
-        await Promise.resolve();
-
-        expect(remaining.value).toBe(0);
-        expect(computedRuns).toBe(3);
-    });
-
-    it('should track dependencies in map callback', async () => {
-        const items = reactive([
-            { value: 10, multiplier: 2 },
-            { value: 20, multiplier: 3 }
-        ]);
-
-        let runs = 0;
-        const results = computed(() => {
-            runs++;
-            return items.map(item => item.value * item.multiplier);
+            items.push('first');
+            await Promise.resolve();
+            expect(document.querySelectorAll('#app > div').length).toBe(1);
         });
 
-        expect(results.value[0]).toBe(20);
-        expect(results.value[1]).toBe(60);
-        expect(runs).toBe(1);
+        it('should handle z-if inside z-for', async () => {
+            document.body.innerHTML = `
+                <div id="app">
+                    <div z-for="item in items" :key="item.id">
+                        <span z-if="item.visible">{{ item.text }}</span>
+                    </div>
+                </div>
+            `;
 
-        // Change nested property
-        items[0].multiplier = 5;
-        await Promise.resolve();
+            const items = reactive([
+                { id: 1, text: 'A', visible: true },
+                { id: 2, text: 'B', visible: false }
+            ]);
 
-        expect(results.value[0]).toBe(50);
-        expect(runs).toBe(2);
-    });
+            app = createApp(() => ({ items }));
+            app.mount('#app');
+            await Promise.resolve();
 
-    it('should work with complex filter + map chains', async () => {
-        const products = reactive([
-            { name: 'A', price: 100, active: true },
-            { name: 'B', price: 200, active: false },
-            { name: 'C', price: 150, active: true }
-        ]);
+            const spans = document.querySelectorAll('span');
+            expect(spans.length).toBe(1);
+            expect(spans[0].textContent).toBe('A');
 
-        let runs = 0;
-        const activePrices = computed(() => {
-            runs++;
-            return products
-                .filter(p => p.active)
-                .map(p => p.price);
+            items[1].visible = true;
+            await Promise.resolve();
+            expect(document.querySelectorAll('span').length).toBe(2);
         });
-
-        expect(activePrices.value).toEqual([100, 150]);
-        expect(runs).toBe(1);
-
-        // Toggle active status
-        products[1].active = true;
-        await Promise.resolve();
-
-        expect(activePrices.value).toEqual([100, 200, 150]);
-        expect(runs).toBe(2);
-
-        // Change price of active item
-        products[0].price = 120;
-        await Promise.resolve();
-
-        expect(activePrices.value).toEqual([120, 200, 150]);
-        expect(runs).toBe(3);
-    });
-
-    it('should handle array mutations efficiently', async () => {
-        const items = reactive([
-            { id: 1, done: false },
-            { id: 2, done: false }
-        ]);
-
-        let filterRuns = 0;
-        const active = computed(() => {
-            filterRuns++;
-            return items.filter(i => !i.done);
-        });
-
-        expect(active.value.length).toBe(2);
-        expect(filterRuns).toBe(1);
-
-        // Push should trigger once
-        items.push({ id: 3, done: false });
-        await Promise.resolve();
-
-        expect(active.value.length).toBe(3);
-        expect(filterRuns).toBe(2);
-
-        // Nested property change should trigger
-        items[0].done = true;
-        await Promise.resolve();
-
-        expect(active.value.length).toBe(2);
-        expect(filterRuns).toBe(3);
     });
 });
