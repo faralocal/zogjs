@@ -31,9 +31,9 @@ npm install zogjs
 
 ```html
 <script type="module">
-  import { createApp, ref } from './zog.js';
+  import { createApp, ref } from 'zog.js';
   // or from CDN
-  import { createApp, ref } from 'https://cdn.example.com/zog.js';
+  import { createApp, ref } from 'https://cdn.zogjs.com/0.4.7/zog.js';
 </script>
 ```
 
